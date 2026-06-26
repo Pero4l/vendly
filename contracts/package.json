@@ -1,0 +1,19 @@
+{
+  "name": "vendly-contracts",
+  "version": "1.0.0",
+  "description": "UUPS Upgradeable smart contracts for Vendly on Celo",
+  "main": "index.js",
+  "scripts": {
+    "compile": "npx hardhat compile",
+    "test": "npx hardhat test",
+    "deploy:alfajores": "npx hardhat run scripts/deploy.js --network alfajores",
+    "deploy:mainnet": "npx hardhat run scripts/deploy.js --network celo"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.0.2",
+    "@openzeppelin/contracts-upgradeable": "^5.0.2",
+    "dotenv": "^16.6.1",
+    "hardhat": "^2.22.4"
+  }
+}

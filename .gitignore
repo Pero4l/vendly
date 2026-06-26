@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment configurations containing secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+**/.env
+**/.env.local
+
+docker-compose.yml
+.docker-compose.yml
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# System files
+.DS_Store
+Thumbs.db

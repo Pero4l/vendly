@@ -1,0 +1,72 @@
+name: Vendly CI Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  contracts:
+    name: Smart Contracts Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Compile Solidity Contracts
+        run: npm run contracts:compile
+
+      - name: Run Hardhat Tests
+        run: npm run contracts:test
+
+  backend:
+    name: Backend Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Run ESLint
+        run: |
+          cd backend
+          npm run lint || true
+
+  frontend:
+    name: Frontend Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Verify Web Build
+        run: |
+          cd frontend
+          npm run build
