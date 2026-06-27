@@ -1,154 +1,248 @@
 const logger = require('./logger');
+require('dotenv').config();
 
-const BREVO_API_KEY = process.env.BREVO_API_KEY;
-const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'no-reply@vendly.com';
-const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || 'Vendly Support';
+// Read at call-time so dotenv timing is never an issue
+function getConfig() {
+  return {
+    apiKey: process.env.BREVO_API_KEY,
+    senderEmail: process.env.BREVO_SENDER_EMAIL,
+    senderName: process.env.BREVO_SENDER_NAME || 'Vendly'
+  };
+}
 
-/**
- * Sends a registration verification email using Brevo.
- * If no API key is provided or the key is a placeholder, it falls back to console logging.
- * 
- * @param {string} email Recipient email address
- * @param {string} fullName Recipient full name
- * @param {string} verificationUrl The email verification link
- */
-async function sendVerificationEmail(email, fullName, verificationUrl) {
-  const isPlaceholderKey = !BREVO_API_KEY || BREVO_API_KEY === 'xkeysib-placeholder-key' || BREVO_API_KEY.includes('placeholder');
+function isConfigured(apiKey) {
+  return apiKey && apiKey !== 'your_brevo_api_key_here' && !apiKey.includes('placeholder');
+}
 
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>Verify your Vendly Account</title>
-      <style>
-        body {
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-          background-color: #f7f9fa;
-          margin: 0;
-          padding: 20px;
-        }
-        .container {
-          max-width: 600px;
-          margin: 0 auto;
-          background: #ffffff;
-          border-radius: 12px;
-          overflow: hidden;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-          border: 1px solid #e1e8ed;
-        }
-        .header {
-          background-color: #EAB308; /* Yellow/Gold Accent */
-          padding: 30px 20px;
-          text-align: center;
-        }
-        .header h1 {
-          color: #ffffff;
-          margin: 0;
-          font-size: 26px;
-          font-weight: 700;
-          letter-spacing: -0.5px;
-        }
-        .content {
-          padding: 40px 30px;
-          color: #1e293b;
-        }
-        .content h2 {
-          font-size: 20px;
-          margin-top: 0;
-          font-weight: 600;
-        }
-        .content p {
-          font-size: 16px;
-          line-height: 1.6;
-          color: #475569;
-        }
-        .btn-container {
-          text-align: center;
-          margin: 30px 0;
-        }
-        .btn {
-          display: inline-block;
-          background-color: #EAB308;
-          color: #ffffff !important;
-          text-decoration: none;
-          padding: 14px 30px;
-          border-radius: 8px;
-          font-size: 16px;
-          font-weight: 600;
-          box-shadow: 0 2px 5px rgba(234, 179, 8, 0.3);
-        }
-        .footer {
-          background-color: #f8fafc;
-          padding: 20px;
-          text-align: center;
-          font-size: 12px;
-          color: #94a3b8;
-          border-top: 1px solid #f1f5f9;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>Vendly Marketplace</h1>
-        </div>
-        <div class="content">
-          <h2>Welcome to Vendly, ${fullName}!</h2>
-          <p>Thank you for registering. To activate your account and set up your secure wallet, please verify your email address by clicking the button below:</p>
-          <div class="btn-container">
-            <a href="${verificationUrl}" class="btn">Verify Email Address</a>
-          </div>
-          <p>This verification link is valid for 24 hours. If you did not sign up for a Vendly account, you can safely ignore this email.</p>
-        </div>
-        <div class="footer">
-          <p>&copy; ${new Date().getFullYear()} Vendly. All rights reserved.</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
+async function dispatchEmail(to, name, subject, htmlContent) {
+  const { apiKey, senderEmail, senderName } = getConfig();
 
-  if (isPlaceholderKey) {
-    logger.info('----------------------------------------------------');
-    logger.info('DEVELOPMENT EMAIL SIMULATION:');
-    logger.info(`To: ${fullName} <${email}>`);
-    logger.info('Subject: Verify your Vendly Account');
-    logger.info(`Verification URL: ${verificationUrl}`);
-    logger.info('----------------------------------------------------');
+  if (!isConfigured(apiKey)) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('BREVO_API_KEY is not set. Email delivery is required in production.');
+    }
+    logger.warn('┌─────────────────────────────────────────────────────┐');
+    logger.warn('│  EMAIL NOT SENT — BREVO_API_KEY not set in .env     │');
+    logger.warn('└─────────────────────────────────────────────────────┘');
+    logger.info(`  To      : ${name} <${to}>`);
+    logger.info(`  Subject : ${subject}`);
     return { success: true, simulated: true };
   }
+
+  if (!senderEmail) {
+    throw new Error('BREVO_SENDER_EMAIL is not set in environment variables.');
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
 
   try {
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
+      signal: controller.signal,
       headers: {
-        'accept': 'application/json',
+        accept: 'application/json',
         'content-type': 'application/json',
-        'api-key': BREVO_API_KEY
+        'api-key': apiKey
       },
       body: JSON.stringify({
-        sender: { name: BREVO_SENDER_NAME, email: BREVO_SENDER_EMAIL },
-        to: [{ email, name: fullName }],
-        subject: 'Verify your Vendly Account',
-        htmlContent: htmlContent
+        sender: { name: senderName, email: senderEmail },
+        to: [{ email: to, name }],
+        subject,
+        htmlContent
       })
     });
 
+    clearTimeout(timer);
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error ${response.status}`);
+      const body = await response.json().catch(() => ({}));
+      const detail = body.message || `HTTP ${response.status}`;
+      logger.error(`[MAILER] Brevo rejected "${subject}" to ${to}: ${detail}`);
+      throw new Error(`Email delivery failed: ${detail}`);
     }
 
     const result = await response.json();
-    logger.info(`Verification email successfully sent to ${email} (Brevo MessageId: ${result.messageId})`);
+    logger.info(`[MAILER] Sent "${subject}" to ${to} (msgId: ${result.messageId})`);
     return { success: true, messageId: result.messageId };
-  } catch (error) {
-    logger.error(`Failed to send email to ${email} via Brevo:`, error.message);
-    throw new Error(`Email dispatch failed: ${error.message}`);
+
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === 'AbortError') {
+      throw new Error('Email request timed out after 15 seconds. Check your network or Brevo status.');
+    }
+    throw err;
   }
 }
 
+// ─── Brand colours (matches frontend globals.css --primary) ──────────────────
+//   Primary   #f59e0b  amber-500
+//   Dark      #d97706  amber-600  (header, strong accents)
+//   Deeper    #b45309  amber-700  (hover, links)
+//   Light bg  #fffbeb  amber-50   (highlight panels)
+//   Light bdr #fde68a  amber-200  (highlight border)
+//   Text dark #1c1917  stone-900
+//   Text mid  #44403c  stone-700
+//   Text mute #78716c  stone-500
+
+const year = () => new Date().getFullYear();
+
+// Shared wrapper — every template drops its <body> content into this shell
+function wrap(preheader, bodyHtml) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
+  <style>
+    /* Reset */
+    body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
+    table,td{mso-table-lspace:0;mso-table-rspace:0}
+    img{-ms-interpolation-mode:bicubic;border:0;display:block;max-width:100%}
+    /* Layout */
+    body{margin:0;padding:0;background:#f5f5f4;font-family:'Inter',ui-sans-serif,system-ui,-apple-system,sans-serif}
+    .email-wrapper{width:100%;background:#f5f5f4;padding:32px 16px}
+    .email-card{max-width:580px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.07)}
+    /* Header */
+    .hdr{background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);padding:32px 24px;text-align:center}
+    .hdr-logo{color:#ffffff;font-size:26px;font-weight:800;letter-spacing:-0.5px;margin:0}
+    .hdr-tagline{color:rgba(255,255,255,.85);font-size:13px;margin:4px 0 0}
+    /* Body */
+    .body{padding:36px 32px}
+    .greeting{font-size:21px;font-weight:700;color:#1c1917;margin:0 0 12px}
+    .body p{font-size:15px;line-height:1.75;color:#44403c;margin:0 0 18px}
+    /* CTA button */
+    .cta{text-align:center;margin:28px 0}
+    .btn{display:inline-block;background:#f59e0b;color:#ffffff!important;text-decoration:none;padding:14px 32px;border-radius:10px;font-size:15px;font-weight:700;letter-spacing:.2px;box-shadow:0 4px 14px rgba(245,158,11,.35)}
+    /* Highlight chip */
+    .chip{background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:8px;padding:14px 16px;margin:20px 0;font-size:14px;color:#44403c}
+    .chip strong{color:#1c1917}
+    /* Divider */
+    .divider{border:none;border-top:1px solid #f5f5f4;margin:24px 0}
+    /* Fine print */
+    .fine{font-size:12px!important;color:#78716c!important;line-height:1.6}
+    /* Footer */
+    .ftr{background:#fafaf9;border-top:1px solid #f5f5f4;padding:20px 24px;text-align:center;font-size:11px;color:#78716c;line-height:1.6}
+    /* Danger text */
+    .danger{color:#dc2626;font-weight:600}
+  </style>
+</head>
+<body>
+  <!-- Preheader (hidden preview text) -->
+  <span style="display:none;font-size:1px;color:#f5f5f4;max-height:0;overflow:hidden;opacity:0">${preheader}&nbsp;&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;</span>
+
+  <div class="email-wrapper">
+    <div class="email-card">
+
+      <div class="hdr">
+        <p class="hdr-logo">Vendly</p>
+        <p class="hdr-tagline">The Web3 Marketplace</p>
+      </div>
+
+      <div class="body">
+        ${bodyHtml}
+      </div>
+
+      <div class="ftr">
+        &copy; ${year()} Vendly &mdash; All rights reserved<br>
+        You're receiving this because you have an account on Vendly.
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// ─── Templates ────────────────────────────────────────────────────────────────
+
+async function sendVerificationEmail(email, fullName, verificationUrl) {
+  const html = wrap(
+    `Verify your email to activate your Vendly account`,
+    `
+    <p class="greeting">Hello ${fullName}!</p>
+    <p>Thanks for signing up. Tap the button below to verify your email address and activate your account. We'll automatically set up your secure Celo Web3 wallet once you're in.</p>
+    <div class="cta">
+      <a href="${verificationUrl}" class="btn">Verify Email Address</a>
+    </div>
+    <hr class="divider">
+    <p class="fine">This link expires in <strong>24 hours</strong>. If you didn't create a Vendly account, you can safely ignore this email.</p>
+    `
+  );
+
+  return dispatchEmail(email, fullName, 'Verify your Vendly account', html);
+}
+
+async function sendWelcomeEmail(email, fullName, username) {
+  const html = wrap(
+    `Welcome to Vendly, ${fullName}! Your account is ready.`,
+    `
+    <p class="greeting">You're in, ${fullName}! 🎉</p>
+    <p>Your email is verified and your Vendly account is live. Your secure Celo Web3 wallet is being created in the background — you'll get a notification the moment it's ready.</p>
+    <div class="chip">
+      <strong>Your Vendly handle:</strong> @${username}<br>
+      <span>People can find and pay you using this username across the marketplace.</span>
+    </div>
+    <p>You're set up as a <strong>buyer</strong>. Whenever you're ready, open a store to start selling.</p>
+    <div class="cta">
+      <a href="${process.env.FRONTEND_URL || 'https://vendly.com'}" class="btn">Explore the Marketplace</a>
+    </div>
+    `
+  );
+
+  return dispatchEmail(email, fullName, 'Welcome to Vendly — your account is ready', html);
+}
+
+async function sendForgotPasswordEmail(email, fullName, resetUrl) {
+  const html = wrap(
+    `Reset your Vendly password — link expires in 1 hour`,
+    `
+    <p class="greeting">Password reset request</p>
+    <p>Hi ${fullName}, we received a request to reset the password on your Vendly account. Click the button below to choose a new password:</p>
+    <div class="cta">
+      <a href="${resetUrl}" class="btn">Reset My Password</a>
+    </div>
+    <hr class="divider">
+    <p class="fine">This link is valid for <strong>1 hour</strong> and can only be used once. If you didn't request a password reset, your account is safe — just ignore this email.</p>
+    `
+  );
+
+  return dispatchEmail(email, fullName, 'Reset your Vendly password', html);
+}
+
+async function sendPasswordResetSuccessEmail(email, fullName) {
+  const html = wrap(
+    `Your Vendly password has been changed`,
+    `
+    <p class="greeting">Password updated successfully</p>
+    <p>Hi ${fullName}, your Vendly account password was just changed.</p>
+    <p class="danger">If you did not make this change, contact our support team immediately — your account may be at risk.</p>
+    `
+  );
+
+  return dispatchEmail(email, fullName, 'Your Vendly password has been changed', html);
+}
+
+async function sendProfileUpdatedEmail(email, fullName, changesSummary) {
+  const html = wrap(
+    `Your Vendly profile was updated`,
+    `
+    <p class="greeting">Profile updated</p>
+    <p>Hi ${fullName}, the following changes were made to your Vendly profile:</p>
+    <div class="chip"><strong>Fields changed:</strong> ${changesSummary}</div>
+    <p class="fine">If you did not make these changes, contact support immediately.</p>
+    `
+  );
+
+  return dispatchEmail(email, fullName, 'Your Vendly profile has been updated', html);
+}
+
 module.exports = {
-  sendVerificationEmail
+  sendVerificationEmail,
+  sendWelcomeEmail,
+  sendForgotPasswordEmail,
+  sendPasswordResetSuccessEmail,
+  sendProfileUpdatedEmail
 };

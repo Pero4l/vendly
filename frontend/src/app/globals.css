@@ -1,14 +1,27 @@
+/* ─────────────────────────────────────────────────────────────────
+ * globals.css — Vendly Global Styles
+ *
+ * Structure:
+ *  1. Tailwind base import
+ *  2. CSS design tokens (colors, fonts)
+ *  3. App shell — layout utilities (bottom-nav clearance)
+ *  4. Glassmorphism utilities
+ *  5. Scrollbar styling
+ *  6. Animations
+ * ───────────────────────────────────────────────────────────────── */
+
 @import "tailwindcss";
 
+/* ── 1. Design Tokens ──────────────────────────────────────────── */
 :root {
   --background: #ffffff;
   --foreground: #171717;
   --border: #e5e5e5;
   --card: #fafafa;
   --card-foreground: #171717;
-  
-  --primary: #f59e0b; /* Yellow/Gold */
+  --primary: #f59e0b;          /* Amber / Gold — brand colour */
   --primary-foreground: #ffffff;
+  --bottom-nav-height: 64px;   /* Height of the mobile BottomNav bar */
 }
 
 @theme inline {
@@ -20,20 +33,44 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* ── 2. Base Body ──────────────────────────────────────────────── */
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), sans-serif;
   overflow-x: hidden;
+  /* Enables momentum-based scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
 }
 
-/* Premium Light Theme Glassmorphism (no gradients) */
+/* ── 3. App Shell — Bottom Nav Clearance ───────────────────────── */
+/*
+ * .app-shell wraps all page content in layout.tsx.
+ * On mobile (below md), it adds bottom padding equal to the
+ * BottomNav height so content is never hidden behind it.
+ * On desktop (md+), the padding is removed because BottomNav
+ * is hidden and pages have their own full-width Header.
+ */
+.app-shell {
+  padding-bottom: var(--bottom-nav-height);
+}
+
+@media (min-width: 768px) {
+  .app-shell {
+    padding-bottom: 0;
+  }
+}
+
+/* ── 4. Glassmorphism Utilities ────────────────────────────────── */
+
+/* Frosted-glass panel — used for overlays and modals */
 .glass-panel {
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(8px);
   border: 1px solid #e5e5e5;
 }
 
+/* Elevated card with hover lift — used for product cards */
 .glass-card {
   background: #ffffff;
   border: 1px solid #e5e5e5;
@@ -42,14 +79,15 @@ body {
 }
 
 .glass-card:hover {
-  border-color: #f59e0b; /* Solid yellow border on hover */
+  border-color: #f59e0b;
   box-shadow: 0 6px 24px 0 rgba(245, 158, 11, 0.12);
   transform: translateY(-1px);
 }
 
-/* Custom Scrollbars for Light Theme */
+/* ── 5. Custom Scrollbars ──────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: #ffffff;
@@ -62,17 +100,39 @@ body {
   background: #f59e0b;
 }
 
-/* Shimmer & Glow Animations */
-@keyframes pulseGlow {
-  0%, 100% {
-    opacity: 0.8;
-  }
-  50% {
-    opacity: 1;
-    filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.2));
-  }
+/* Hide scrollbar on mobile horizontal scroll containers */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
+/* ── 6. Animations ─────────────────────────────────────────────── */
+
+/* Ambient glow pulse — used on the hero section illustration */
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.8; }
+  50%       { opacity: 1; filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.2)); }
+}
 .glow-glow {
   animation: pulseGlow 4s infinite ease-in-out;
+}
+
+/* Slide-up entrance — used on bottom sheet / drawer components */
+@keyframes slideUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.slide-up {
+  animation: slideUp 0.25s ease-out forwards;
+}
+
+/* Fade-in — generic soft entrance */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
 }

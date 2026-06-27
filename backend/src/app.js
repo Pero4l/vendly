@@ -14,11 +14,14 @@ app.use(express.urlencoded({ extended: true }));
 
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
-  app.use('/api/', apiLimiter);
 }
 
-// Routes
-app.use('/api/v1', routes);
+app.get('/', (req, res) => {
+  res.send('Welcome to Vendly API');
+});
+
+// API routes with rate limiting
+app.use('/', apiLimiter, routes);
 
 // Health Check
 app.get('/health', (req, res) => {

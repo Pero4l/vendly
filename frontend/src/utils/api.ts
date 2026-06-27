@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 // Initial Mock Database setup for fully responsive offline demo
 const DEFAULT_MOCK_DB = {
@@ -80,7 +80,31 @@ const DEFAULT_MOCK_DB = {
   ],
   orders: [] as any[],
   disputes: [] as any[],
-  notifications: [] as any[]
+  notifications: [] as any[],
+  wallets: [
+    {
+      id: 'w1', userId: 'u1',
+      address: '0x3A1F2B9cD4e56789aBcDeF0123456789AbCdEf01',
+      balances: { CELO: 4.25, cUSD: 12.50, USDT: 8.00, USDC: 5.00 }
+    },
+    {
+      id: 'w2', userId: 'u2',
+      address: '0x9B2C3d4E5f678901aBcDeF2345678901AbCdEf02',
+      balances: { CELO: 10.00, cUSD: 50.00, USDT: 20.00, USDC: 15.00 }
+    },
+    {
+      id: 'w3', userId: 'u3',
+      address: '0xC3D4E5f6789012bcDeF3456789012BcDeF012303',
+      balances: { CELO: 100.00, cUSD: 200.00, USDT: 50.00, USDC: 50.00 }
+    }
+  ] as any[],
+  walletTransactions: [
+    { id: 'tx1', walletId: 'w1', type: 'DEPOSIT', token: 'CELO', amount: '2.00', status: 'COMPLETED', senderAddress: 'External', receiverAddress: '0x3A1F2B9cD4e56789aBcDeF0123456789AbCdEf01', txHash: '0xabc123', createdAt: new Date(Date.now() - 86400000 * 3).toISOString() },
+    { id: 'tx2', walletId: 'w1', type: 'ESCROW', token: 'CELO', amount: '1.50', status: 'COMPLETED', senderAddress: '0x3A1F2B9cD4e56789aBcDeF0123456789AbCdEf01', receiverAddress: 'Escrow Contract', txHash: '0xdef456', createdAt: new Date(Date.now() - 86400000 * 2).toISOString() },
+    { id: 'tx3', walletId: 'w1', type: 'TRANSFER', token: 'cUSD', amount: '5.00', status: 'COMPLETED', senderAddress: '0x3A1F2B9cD4e56789aBcDeF0123456789AbCdEf01', receiverAddress: '0x9B2C3d4E5f678901aBcDeF2345678901AbCdEf02', txHash: '0xghi789', createdAt: new Date(Date.now() - 86400000).toISOString() },
+    { id: 'tx4', walletId: 'w2', type: 'DEPOSIT', token: 'cUSD', amount: '30.00', status: 'COMPLETED', senderAddress: 'External', receiverAddress: '0x9B2C3d4E5f678901aBcDeF2345678901AbCdEf02', txHash: '0xjkl000', createdAt: new Date(Date.now() - 86400000 * 5).toISOString() },
+    { id: 'tx5', walletId: 'w2', type: 'WITHDRAWAL', token: 'CELO', amount: '3.00', status: 'PENDING', senderAddress: '0x9B2C3d4E5f678901aBcDeF2345678901AbCdEf02', receiverAddress: 'External Wallet', txHash: null, createdAt: new Date(Date.now() - 3600000).toISOString() }
+  ] as any[]
 };
 
 function getMockDB(): typeof DEFAULT_MOCK_DB {
@@ -444,6 +468,85 @@ function handleMockRequest(endpoint: string, options: RequestInit = {}): any {
 
     saveMockDB(db);
     return { success: true, data: newDispute };
+  }
+
+  // 8. WALLET ROUTES
+  if (path === '/wallet/balance') {
+    if (!activeUser) throw new Error('Unauthorized');
+    const wallet = db.wallets.find((w: any) => w.userId === activeUser.id);
+    if (!wallet) {
+      // Auto-create a mock wallet for new users
+      const newWallet = {
+        id: 'w' + (db.wallets.length + 1),
+        userId: activeUser.id,
+        address: '0x' + Math.random().toString(16).substr(2, 40).padEnd(40, '0'),
+        balances: { CELO: 0.00, cUSD: 0.00, USDT: 0.00, USDC: 0.00 }
+      };
+      db.wallets.push(newWallet);
+      saveMockDB(db);
+      return { success: true, data: { id: newWallet.id, address: newWallet.address, balances: newWallet.balances } };
+    }
+    return { success: true, data: { id: wallet.id, address: wallet.address, balances: wallet.balances } };
+  }
+
+  if (path === '/wallet/history') {
+    if (!activeUser) throw new Error('Unauthorized');
+    const wallet = db.wallets.find((w: any) => w.userId === activeUser.id);
+    if (!wallet) return { success: true, data: [] };
+    const txs = db.walletTransactions.filter((tx: any) => tx.walletId === wallet.id);
+    return { success: true, data: txs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) };
+  }
+
+  if (path === '/wallet/transfer' && method === 'POST') {
+    if (!activeUser) throw new Error('Unauthorized');
+    const { receiverAddress, token, amount } = body;
+    if (!receiverAddress || !token || !amount) throw new Error('Missing transfer parameters');
+    const wallet = db.wallets.find((w: any) => w.userId === activeUser.id);
+    if (!wallet) throw new Error('Wallet not found');
+    const bal = wallet.balances[token] || 0;
+    if (bal < parseFloat(amount)) throw new Error(`Insufficient ${token} balance`);
+    wallet.balances[token] = parseFloat((bal - parseFloat(amount)).toFixed(6));
+    const newTx = {
+      id: 'tx' + Date.now(),
+      walletId: wallet.id,
+      type: 'TRANSFER',
+      token,
+      amount: String(amount),
+      status: 'COMPLETED',
+      senderAddress: wallet.address,
+      receiverAddress,
+      txHash: '0x' + Math.random().toString(16).substr(2, 64),
+      createdAt: new Date().toISOString()
+    };
+    db.walletTransactions.push(newTx);
+    saveMockDB(db);
+    return { success: true, message: 'Transfer executed successfully', data: newTx };
+  }
+
+  if (path === '/wallet/withdraw' && method === 'POST') {
+    if (!activeUser) throw new Error('Unauthorized');
+    const { destinationAddress, token, amount } = body;
+    if (!destinationAddress || !token || !amount) throw new Error('Missing withdrawal parameters');
+    const wallet = db.wallets.find((w: any) => w.userId === activeUser.id);
+    if (!wallet) throw new Error('Wallet not found');
+    const bal = wallet.balances[token] || 0;
+    if (bal < parseFloat(amount)) throw new Error(`Insufficient ${token} balance`);
+    wallet.balances[token] = parseFloat((bal - parseFloat(amount)).toFixed(6));
+    const newTx = {
+      id: 'tx' + Date.now(),
+      walletId: wallet.id,
+      type: 'WITHDRAWAL',
+      token,
+      amount: String(amount),
+      status: 'PENDING',
+      senderAddress: wallet.address,
+      receiverAddress: destinationAddress,
+      txHash: null,
+      createdAt: new Date().toISOString()
+    };
+    db.walletTransactions.push(newTx);
+    saveMockDB(db);
+    return { success: true, message: 'Withdrawal request submitted for approval', data: newTx };
   }
 
   // Default fallback error

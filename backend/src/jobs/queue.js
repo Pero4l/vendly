@@ -149,9 +149,10 @@ async function addNotificationJob(userId, title, message) {
 /**
  * Adds a background wallet creation job.
  * @param {string} userId
+ * @param {string} username
  */
-async function addWalletCreationJob(userId) {
-  await walletQueue.add('create-wallet', { userId });
+async function addWalletCreationJob(userId, username) {
+  await walletQueue.add('create-wallet', { userId, username });
 }
 
 module.exports = {

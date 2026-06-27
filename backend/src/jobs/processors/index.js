@@ -60,9 +60,9 @@ function startWorkers() {
 
   // Wallet creation worker
   const walletWorker = new Worker('wallets', async (job) => {
-    const { userId } = job.data;
+    const { userId, username } = job.data;
     console.log(`[Worker] Creating wallet for user: ${userId}`);
-    await walletService.createWalletForUser(userId);
+    await walletService.createWalletForUser(userId, username);
   }, { connection });
 
   txWorker.on('completed', (job) => console.log(`[Worker] Transaction job completed: ${job.id}`));

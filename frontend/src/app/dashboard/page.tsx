@@ -311,7 +311,7 @@ export default function Dashboard() {
                   You haven't placed any escrow orders yet. Go back to the marketplace to purchase your first product!
                 </p>
                 <Link
-                  href="/"
+                  href="/marketplace"
                   className="mt-4 inline-block rounded-lg bg-amber-500 hover:bg-amber-600 text-xs font-bold text-white px-4 py-2 transition-colors"
                 >
                   Shop Listings

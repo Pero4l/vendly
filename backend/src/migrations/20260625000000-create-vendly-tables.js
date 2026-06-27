@@ -77,6 +77,7 @@ module.exports = {
         references: { model: 'users', key: 'id' },
         onDelete: 'CASCADE'
       },
+      username: { type: Sequelize.STRING(50), allowNull: true },
       address: { type: Sequelize.STRING(255), unique: true, allowNull: false },
       encrypted_private_key: { type: Sequelize.TEXT, allowNull: false },
       is_active: { type: Sequelize.BOOLEAN, defaultValue: true, allowNull: false },

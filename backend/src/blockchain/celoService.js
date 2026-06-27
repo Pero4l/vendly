@@ -29,12 +29,35 @@ const ESCROW_ABI = [
 const PROVIDER_URL = process.env.CELO_PROVIDER_URL || 'https://alfajores-forno.celo-testnet.org';
 const provider = new ethers.JsonRpcProvider(PROVIDER_URL);
 
-// Admin server wallet for signing escrow contract releases
-const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY || '0x0000000000000000000000000000000000000000000000000000000000000001';
-const adminWallet = new ethers.Wallet(ADMIN_PRIVATE_KEY, provider);
-
 const ESCROW_CONTRACT_ADDRESS = process.env.ESCROW_CONTRACT_ADDRESS || ethers.ZeroAddress;
-const escrowContract = new ethers.Contract(ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, adminWallet);
+
+// Admin wallet is created lazily — only when an escrow function is actually called.
+// This prevents crashing on startup when ADMIN_PRIVATE_KEY is not yet set.
+let _adminWallet = null;
+let _escrowContract = null;
+
+function getAdminWallet() {
+  if (_adminWallet) return _adminWallet;
+
+  const key = process.env.ADMIN_PRIVATE_KEY;
+  const isValidKey = key && /^0x[0-9a-fA-F]{64}$/.test(key);
+
+  if (!isValidKey) {
+    throw new Error(
+      'ADMIN_PRIVATE_KEY is not set or invalid in .env. ' +
+      'It must be a 32-byte hex string starting with 0x (64 hex chars after 0x).'
+    );
+  }
+
+  _adminWallet = new ethers.Wallet(key, provider);
+  return _adminWallet;
+}
+
+function getEscrowContract() {
+  if (_escrowContract) return _escrowContract;
+  _escrowContract = new ethers.Contract(ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, getAdminWallet());
+  return _escrowContract;
+}
 
 /**
  * Generates a new random Celo wallet address.
@@ -110,19 +133,20 @@ async function transferTokens(senderPrivateKey, receiverAddress, tokenSymbol, am
  */
 async function triggerEscrowRelease(orderId, stage) {
   if (ESCROW_CONTRACT_ADDRESS === ethers.ZeroAddress) {
-    console.warn("Escrow contract address not configured, skipping blockchain transaction");
+    console.warn('[Escrow] Contract address not configured — skipping blockchain call');
     return '0x_mock_tx_hash_for_development';
   }
 
-  const orderIdBytes = ethers.id(orderId); // Hash UUID to bytes32
+  const contract = getEscrowContract();
+  const orderIdBytes = ethers.id(orderId);
   let tx;
-  
+
   if (stage === 1) {
-    tx = await escrowContract.releaseThirtyPercent(orderIdBytes);
+    tx = await contract.releaseThirtyPercent(orderIdBytes);
   } else if (stage === 2) {
-    tx = await escrowContract.releaseTwentyPercent(orderIdBytes);
+    tx = await contract.releaseTwentyPercent(orderIdBytes);
   } else if (stage === 3) {
-    tx = await escrowContract.releaseFinalFiftyPercent(orderIdBytes);
+    tx = await contract.releaseFinalFiftyPercent(orderIdBytes);
   } else {
     throw new Error('Invalid release stage');
   }
@@ -136,14 +160,15 @@ async function triggerEscrowRelease(orderId, stage) {
  */
 async function triggerEscrowRefund(orderId, amount) {
   if (ESCROW_CONTRACT_ADDRESS === ethers.ZeroAddress) {
-    console.warn("Escrow contract address not configured, skipping blockchain transaction");
+    console.warn('[Escrow] Contract address not configured — skipping blockchain call');
     return '0x_mock_tx_hash_for_development';
   }
 
+  const contract = getEscrowContract();
   const orderIdBytes = ethers.id(orderId);
   const amountWei = ethers.parseEther(amount.toString());
 
-  const tx = await escrowContract.refundBuyer(orderIdBytes, amountWei);
+  const tx = await contract.refundBuyer(orderIdBytes, amountWei);
   const receipt = await tx.wait();
   return receipt.hash;
 }
@@ -153,14 +178,15 @@ async function triggerEscrowRefund(orderId, amount) {
  */
 async function triggerDisputeResolve(orderId, refundAmount) {
   if (ESCROW_CONTRACT_ADDRESS === ethers.ZeroAddress) {
-    console.warn("Escrow contract address not configured, skipping blockchain transaction");
+    console.warn('[Escrow] Contract address not configured — skipping blockchain call');
     return '0x_mock_tx_hash_for_development';
   }
 
+  const contract = getEscrowContract();
   const orderIdBytes = ethers.id(orderId);
   const refundWei = ethers.parseEther(refundAmount.toString());
 
-  const tx = await escrowContract.resolveDispute(orderIdBytes, refundWei);
+  const tx = await contract.resolveDispute(orderIdBytes, refundWei);
   const receipt = await tx.wait();
   return receipt.hash;
 }

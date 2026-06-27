@@ -188,7 +188,7 @@ export default function ProductDetails() {
         <Header />
         <div className="flex-1 flex flex-col items-center justify-center space-y-4">
           <p className="text-neutral-500 font-semibold">Product listing not found.</p>
-          <Link href="/" className="text-amber-600 hover:underline text-xs font-bold">Back to Marketplace</Link>
+          <Link href="/marketplace" className="text-amber-600 hover:underline text-xs font-bold">Back to Marketplace</Link>
         </div>
       </div>
     );
@@ -211,7 +211,7 @@ export default function ProductDetails() {
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 flex-1 space-y-6">
         
         {/* Breadcrumbs */}
-        <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-bold text-neutral-500 hover:text-neutral-950 transition-colors">
+        <Link href="/marketplace" className="inline-flex items-center gap-1.5 text-xs font-bold text-neutral-500 hover:text-neutral-950 transition-colors">
           <ArrowLeft className="h-3.5 w-3.5" />
           Back to Listings
         </Link>

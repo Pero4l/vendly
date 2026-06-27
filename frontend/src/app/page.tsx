@@ -1,583 +1,693 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState } from 'react';
 import Header from '../components/Header';
-import { apiRequest } from '../utils/api';
-import { ShoppingBag, Search, Sparkles, Filter, ShieldCheck, ArrowRight, Star, RefreshCw, AlertCircle } from 'lucide-react';
+import {
+  ShieldCheck,
+  ArrowRight,
+  Wallet,
+  Sparkles,
+  Star,
+  Package,
+  Truck,
+  Lock,
+  ArrowUpRight,
+  ShieldAlert,
+  CheckCircle,
+  RefreshCw,
+  Layers,
+  Database,
+  ArrowRightLeft
+} from 'lucide-react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 
-function MarketplaceContent() {
-  const searchParams = useSearchParams();
+// Interactive Escrow Simulator Stages data
+const SIMULATOR_STAGES = [
+  {
+    stage: 1,
+    title: "Stage 1: Deposit & Initial Lock",
+    payout: "30% Released | 70% Escrowed",
+    actor: "Buyer Action Required",
+    desc: "The buyer submits the order and locks 100% of the purchase funds into the Celo smart contract. 30% of the funds are immediately released to the seller to cover packaging, handling, and initial postage costs, eliminating merchant cashflow bottlenecks."
+  },
+  {
+    stage: 2,
+    title: "Stage 2: Courier Dispatch & Transit",
+    payout: "50% Cumulative | 50% Escrowed",
+    actor: "Carrier Verification Required",
+    desc: "The seller packages the item, dispatches it via an integrated carrier (e.g. DHL, FedEx), and uploads the tracking number. Once the carrier's API scans and registers the package in transit, the smart contract automatically unlocks another 20% of the funds."
+  },
+  {
+    stage: 3,
+    title: "Stage 3: Final Delivery & Settlement",
+    payout: "100% Fully Settled | 0% Escrowed",
+    actor: "Buyer or Courier Confirmation",
+    desc: "The item arrives at the buyer's destination. Upon the buyer clicking 'Confirm Delivery' (or automatically after 72 hours of courier-verified delivery), the smart contract releases the final 50% of the funds to the merchant, completing the secure cycle."
+  }
+];
 
-  const [products, setProducts] = useState<any[]>([]);
-  const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('');
-  const [minPrice, setMinPrice] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
-  const [minRating, setMinRating] = useState('');
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [seedLoading, setSeedLoading] = useState(false);
+export default function Home() {
+  const [activeStage, setActiveStage] = useState(1);
+  const [isSimulating, setIsSimulating] = useState(false);
 
-  // Read URL search params for instant header-homepage sync
-  useEffect(() => {
-    const qSearch = searchParams.get('search') || '';
-    const qCat = searchParams.get('categoryId') || '';
-    setSearch(qSearch);
-    setCategory(qCat);
-  }, [searchParams]);
-
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const query = new URLSearchParams();
-      if (search) query.append('search', search);
-      if (category) query.append('categoryId', category);
-      if (minPrice) query.append('minPrice', minPrice);
-      if (maxPrice) query.append('maxPrice', maxPrice);
-
-      const res = await apiRequest(`/products?${query.toString()}`);
-      if (res.success) {
-        let items = res.data;
-        // Client-side rating filter simulation if selected
-        if (minRating) {
-          const rLimit = parseFloat(minRating);
-          items = items.filter((p: any) => {
-            const pRating = p.id === 'p1' ? 4.9 : p.id === 'p2' ? 4.8 : p.id === 'p3' ? 4.7 : 4.5;
-            return pRating >= rLimit;
-          });
-        }
-        setProducts(items);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+  const handleNextStage = () => {
+    if (activeStage < 3) {
+      setIsSimulating(true);
+      setTimeout(() => {
+        setActiveStage(prev => prev + 1);
+        setIsSimulating(false);
+      }, 1000);
+    } else {
+      setIsSimulating(true);
+      setTimeout(() => {
+        setActiveStage(1);
+        setIsSimulating(false);
+      }, 800);
     }
   };
 
-  const fetchCategories = async () => {
-    try {
-      setCategories([
-        { id: '1', name: 'Electronics', slug: 'electronics', image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=400' },
-        { id: '2', name: 'Digital Services', slug: 'digital-services', image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=400' },
-        { id: '3', name: 'Apparel', slug: 'apparel', image: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&q=80&w=400' },
-        { id: '4', name: 'Home & Kitchen', slug: 'home-kitchen', image: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=400' }
-      ]);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // Re-run search/fetch when categories, keyword, rating limits change
-  useEffect(() => {
-    fetchProducts();
-    fetchCategories();
-  }, [category, search, minRating]);
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchProducts();
-  };
-
-  const seedMockStoreAndProducts = async () => {
-    setSeedLoading(true);
-    try {
-      const sellerEmail = 'seller@vendly.com';
-      let loginRes;
-      try {
-        loginRes = await apiRequest('/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({ email: sellerEmail, password: 'password123' })
-        });
-      } catch (err) {
-        await apiRequest('/auth/register', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: 'Bob Storefront',
-            email: sellerEmail,
-            password: 'password123',
-            role: 'SELLER'
-          })
-        });
-        loginRes = await apiRequest('/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({ email: sellerEmail, password: 'password123' })
-        });
-      }
-
-      const previousToken = localStorage.getItem('vendly_token');
-      localStorage.setItem('vendly_token', loginRes.data.accessToken);
-
-      let storeRes;
-      try {
-        storeRes = await apiRequest('/stores', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: 'Celo Alpha Emporium',
-            description: 'Premium Web3 physical goods and digital assets.'
-          })
-        });
-      } catch (err) {
-        storeRes = await apiRequest('/stores/my-store');
-      }
-
-      const storeId = storeRes.data.id;
-
-      const adminEmail = 'admin@vendly.com';
-      let adminLoginRes;
-      try {
-        adminLoginRes = await apiRequest('/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({ email: adminEmail, password: 'password123' })
-        });
-      } catch (err) {
-        await apiRequest('/auth/register', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: 'Chief Moderator',
-            email: adminEmail,
-            password: 'password123',
-            role: 'ADMIN'
-          })
-        });
-        adminLoginRes = await apiRequest('/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({ email: adminEmail, password: 'password123' })
-        });
-      }
-
-      localStorage.setItem('vendly_token', adminLoginRes.data.accessToken);
-      await apiRequest('/admin/approve-store', {
-        method: 'POST',
-        body: JSON.stringify({ storeId, approve: true })
-      });
-
-      localStorage.setItem('vendly_token', loginRes.data.accessToken);
-
-      const mockCategory = categories[0] || { id: '1' };
-
-      const p1 = {
-        title: 'Premium Web3 Hardware Ledger',
-        description: 'Secure, offline physical storage device supporting CELO, cUSD, and standard tokens.',
-        price: '1.5',
-        quantity: 10,
-        categoryId: mockCategory.id,
-        images: ['https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&q=80&w=400']
-      };
-
-      const p2 = {
-        title: 'Celo NFT Artwork Collection',
-        description: 'Limited edition high fidelity digital art minted directly on the Celo blockchain.',
-        price: '0.5',
-        quantity: 5,
-        categoryId: mockCategory.id,
-        images: ['https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&q=80&w=400']
-      };
-
-      const p3 = {
-        title: 'Sleek Cyber Hoodie (Special Edition)',
-        description: 'Cotton-poly blend cyber-aesthetic apparel with embroidered physical QR tag.',
-        price: '2.0',
-        quantity: 20,
-        categoryId: mockCategory.id,
-        images: ['https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&q=80&w=400']
-      };
-
-      await apiRequest('/products', { method: 'POST', body: JSON.stringify(p1) });
-      await apiRequest('/products', { method: 'POST', body: JSON.stringify(p2) });
-      await apiRequest('/products', { method: 'POST', body: JSON.stringify(p3) });
-
-      if (previousToken) {
-        localStorage.setItem('vendly_token', previousToken);
-      } else {
-        localStorage.removeItem('vendly_token');
-      }
-
-      await fetchProducts();
-    } catch (err: any) {
-      alert(`Seeding failed: ${err.message}`);
-    } finally {
-      setSeedLoading(false);
-    }
-  };
+  const categories = [
+    { id: '1', name: 'Electronics', slug: 'electronics', count: '12 active listings', image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=600', desc: 'Secure purchase of hardware wallets, physical ledgers, and secure electronics.' },
+    { id: '2', name: 'Digital Services', slug: 'digital-services', count: '8 active listings', image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=600', desc: 'Domain names, digital subscriptions, certificates, and escrow-released SaaS tokens.' },
+    { id: '3', name: 'Apparel', slug: 'apparel', count: '15 active listings', image: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&q=80&w=600', desc: 'Exclusive drops, high-fashion streetwear, and merchandise with physical NFC/QR tags.' },
+    { id: '4', name: 'Home & Kitchen', slug: 'home-kitchen', count: '5 active listings', image: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=600', desc: 'Premium home furniture, appliances, and kitchen items backed by escrow delivery guarantees.' }
+  ];
 
   return (
-    <div className="flex flex-col min-h-screen bg-white text-neutral-900">
+    <div className="flex flex-col min-h-screen bg-white text-neutral-900 selection:bg-amber-100 selection:text-amber-900">
       <Header />
 
-      {/* 1. Large eBay/Amazon Style Hero Promotional Banner */}
-      <section className="relative bg-neutral-900 overflow-hidden py-12 md:py-20 px-6 sm:px-12 lg:px-20 border-b border-neutral-200">
-        {/* Background visual graphics */}
-        <div className="absolute right-0 bottom-0 top-0 w-1/2 opacity-25 hidden md:block">
-          <img 
-            src="https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&q=80&w=800" 
-            alt="Web3 secure tech background" 
-            className="w-full h-full object-cover grayscale brightness-50"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-neutral-900 to-transparent" />
-        </div>
+      {/* 1. HERO SECTION: High-contrast, premium, dark-gradient styling */}
+      <section className="relative bg-neutral-950 text-white py-24 px-6 sm:px-12 lg:px-24 overflow-hidden border-b border-neutral-850">
 
-        <div className="relative mx-auto max-w-7xl space-y-6 z-10">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/50 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-400">
-            <Sparkles className="h-3.5 w-3.5" />
-            100% Secure Web3 Smart Contract Escrow
-          </div>
+        {/* Organic colored background glows */}
+        <div className="absolute top-0 right-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-10 left-10 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          <h1 className="text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl text-white max-w-2xl leading-none">
-            Secure, Safe & Verified <br />
-            <span className="text-amber-500">Commerce on Celo</span>
-          </h1>
+        <div className="mx-auto max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-16 items-center relative z-10">
 
-          <p className="max-w-xl text-sm sm:text-base text-neutral-400 leading-relaxed">
-            Trade physical items and digital certificates with automatic buyer protection. Your CELO/cUSD is locked securely in a multi-stage release smart contract until delivery is audited.
-          </p>
+          {/* Left Column: Title & Main Value Prop */}
+          <div className="lg:col-span-7 space-y-8">
 
-          <div className="flex flex-wrap gap-4 pt-2">
-            <a 
-              href="#catalog"
-              className="rounded-lg bg-amber-500 hover:bg-amber-600 px-6 py-3 text-sm font-bold text-white transition-colors cursor-pointer"
-            >
-              Browse Catalog
-            </a>
-            <Link 
-              href="/store"
-              className="rounded-lg border border-neutral-700 hover:border-neutral-500 px-6 py-3 text-sm font-bold text-neutral-300 transition-colors"
-            >
-              Open Merchant Store
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. Amazon-style Department Grid (4-box Cards) */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 w-full">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {categories.map((cat: any) => (
-            <div 
-              key={cat.id} 
-              className="bg-neutral-50 border border-neutral-200 rounded-xl p-5 flex flex-col justify-between hover:shadow-md transition-shadow"
-            >
-              <div className="space-y-2">
-                <h3 className="font-bold text-neutral-900 text-base">{cat.name}</h3>
-                <div className="h-32 rounded-lg overflow-hidden relative">
-                  <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
-                </div>
-              </div>
-              <button
-                onClick={() => setCategory(cat.id)}
-                className="mt-4 text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 hover:underline cursor-pointer"
-              >
-                Shop Now <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 3. Main Browser Catalog container */}
-      <main id="catalog" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10 flex-1 flex flex-col lg:flex-row gap-8 w-full">
-        
-        {/* Left Side Filter Panel */}
-        <aside className="w-full lg:w-64 shrink-0 space-y-6">
-          <div className="rounded-xl border border-neutral-200 bg-white p-6 space-y-6 shadow-xs">
-            <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
-              <h3 className="font-extrabold text-neutral-900 flex items-center gap-2 text-sm uppercase tracking-wider">
-                <Filter className="h-4 w-4 text-amber-500" />
-                Filter Catalog
-              </h3>
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3.5 py-1 text-xs font-bold text-amber-400 tracking-wide">
+              <Sparkles className="h-4 w-4 text-amber-400 animate-pulse" />
+              Next-Gen Commerce Secured by Celo Blockchain
             </div>
 
-            {/* Keyword Search inside Sidebar */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Keywords</label>
-              <form onSubmit={handleSearchSubmit} className="relative">
-                <input 
-                  type="text"
-                  placeholder="e.g. Ledger, Hoodie..."
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 pl-9 text-xs text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                />
-                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-neutral-400" />
-              </form>
-            </div>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-none text-white">
+              Zero-Trust <br />
+              <span className="bg-orange-400 bg-clip-text text-transparent">
+                Escrow Commerce
+              </span>
+            </h1>
 
-            {/* Department Selection list */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Departments</label>
-              <div className="flex flex-col gap-1.5">
-                <button 
-                  onClick={() => setCategory('')} 
-                  className={`text-left text-xs px-2.5 py-1.5 rounded-md transition-colors ${
-                    !category ? 'bg-amber-500 text-white font-bold' : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
-                  }`}
-                >
-                  All Departments
-                </button>
-                {categories.map((cat: any) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => setCategory(cat.id)}
-                    className={`text-left text-xs px-2.5 py-1.5 rounded-md transition-colors ${
-                      category === cat.id ? 'bg-amber-500 text-white font-bold' : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
-                    }`}
-                  >
-                    {cat.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Price bounds filter */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Price (CELO)</label>
-              <div className="flex gap-2">
-                <input 
-                  type="number"
-                  placeholder="Min"
-                  value={minPrice}
-                  onChange={e => setMinPrice(e.target.value)}
-                  className="w-1/2 rounded-lg border border-neutral-350 bg-white px-3 py-2 text-xs text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                />
-                <input 
-                  type="number"
-                  placeholder="Max"
-                  value={maxPrice}
-                  onChange={e => setMaxPrice(e.target.value)}
-                  className="w-1/2 rounded-lg border border-neutral-350 bg-white px-3 py-2 text-xs text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                />
-              </div>
-              <button 
-                onClick={fetchProducts}
-                className="w-full mt-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 py-2 text-xs font-bold text-white transition-colors cursor-pointer"
-              >
-                Apply Price Limit
-              </button>
-            </div>
-
-            {/* Seller Reputation Rating Filter */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Seller Rating</label>
-              <div className="flex flex-col gap-1">
-                {[
-                  { val: '4.8', label: '4.8 Stars & Up' },
-                  { val: '4.5', label: '4.5 Stars & Up' },
-                  { val: '', label: 'All Ratings' }
-                ].map(r => (
-                  <button
-                    key={r.val}
-                    onClick={() => setMinRating(r.val)}
-                    className={`text-left text-xs px-2.5 py-1.5 rounded-md transition-colors flex items-center gap-1 ${
-                      minRating === r.val ? 'bg-amber-100 text-amber-800 font-bold' : 'text-neutral-600 hover:bg-neutral-100'
-                    }`}
-                  >
-                    <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-                    {r.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-          </div>
-
-          {/* Seeding block if empty database */}
-          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-6 space-y-4">
-            <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
-              <AlertCircle className="h-4 w-4" />
-              Demo Helper Panel
-            </h4>
-            <p className="text-[11px] text-neutral-600 leading-relaxed">
-              If the database contains no listings yet, click below to automatically seed mock store profiles, category tokens, and verified product listings.
+            <p className="text-neutral-400 text-sm sm:text-base leading-relaxed max-w-xl">
+              Vendly eliminates commerce fraud. By locking purchase payments in decentralized, audited smart contracts, we disburse funds incrementally to merchants based on real-world shipment and delivery tracking milestones.
             </p>
-            <button 
-              onClick={seedMockStoreAndProducts}
-              disabled={seedLoading}
-              className="w-full rounded-lg bg-amber-500 hover:bg-amber-600 px-4 py-2 text-xs font-bold text-white transition-colors disabled:opacity-50 cursor-pointer"
-            >
-              {seedLoading ? 'Seeding Database...' : 'Seed Mock Products'}
-            </button>
-          </div>
-        </aside>
 
-        {/* Right side: Product Catalog Grid */}
-        <section className="flex-1 space-y-6">
-          <div className="flex items-center justify-between border-b border-neutral-200 pb-4">
-            <div>
-              <h2 className="text-xl font-black text-neutral-900">
-                {category ? categories.find(c => c.id === category)?.name : 'All Products'}
-              </h2>
-              <p className="text-xs text-neutral-500 mt-0.5">Verified escrow protection active on all items</p>
-            </div>
-            <span className="text-xs font-bold text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">
-              {products.length} Items Available
-            </span>
-          </div>
-
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 space-y-3">
-              <RefreshCw className="h-8 w-8 animate-spin text-amber-500" />
-              <p className="text-xs text-neutral-500 font-medium">Retrieving verified listings...</p>
-            </div>
-          ) : products.length === 0 ? (
-            <div className="rounded-2xl border-2 border-dashed border-neutral-350 p-16 text-center text-neutral-500">
-              <ShoppingBag className="mx-auto h-12 w-12 text-neutral-300 mb-3" />
-              <p className="text-base font-bold text-neutral-700">No products found</p>
-              <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
-                No active listings match your filters. Try clearing your search keyword or seed mock products.
-              </p>
-              <button
-                onClick={() => { setSearch(''); setCategory(''); setMinPrice(''); setMaxPrice(''); setMinRating(''); }}
-                className="mt-4 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-xs font-bold text-white px-4 py-2 transition-colors cursor-pointer"
+            <div className="flex flex-wrap gap-4 pt-2">
+              <Link
+                href="/marketplace"
+                className="group rounded-xl bg-amber-500 hover:bg-amber-600 px-7 py-4 text-sm font-bold text-white transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2 cursor-pointer"
               >
-                Reset Filters
-              </button>
+                Enter Marketplace
+                <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
+
+              {/* Custom Web3 Connect Wallet Button */}
+              <ConnectButton.Custom>
+                {({ account, chain, openConnectModal, mounted }) => {
+                  const ready = mounted;
+                  const connected = ready && account && chain;
+
+                  if (!connected) {
+                    return (
+                      <button
+                        onClick={openConnectModal}
+                        className="rounded-xl border border-neutral-700 hover:border-neutral-550 bg-neutral-900/50 hover:bg-neutral-900 px-7 py-4 text-sm font-bold text-neutral-300 transition-all flex items-center gap-2 cursor-pointer"
+                      >
+                        <Wallet className="h-4 w-4 text-amber-400" />
+                        Connect Wallet
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <Link
+                      href="/dashboard"
+                      className="rounded-xl border border-emerald-500/30 hover:border-emerald-550 bg-emerald-500/10 hover:bg-emerald-500/15 px-7 py-4 text-sm font-bold text-emerald-400 transition-all flex items-center gap-2"
+                    >
+                      <Wallet className="h-4 w-4 text-emerald-400 animate-pulse" />
+                      View Dashboard
+                    </Link>
+                  );
+                }}
+              </ConnectButton.Custom>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {products.map((product: any) => {
-                const img = product.images?.[0]?.imageUrl || 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&q=80&w=400';
-                
-                // Simulate reviews score and USD estimation
-                const mockRating = product.id === 'p1' ? 4.9 : product.id === 'p2' ? 4.8 : product.id === 'p3' ? 4.7 : 4.5;
-                const mockSales = product.id === 'p1' ? 42 : product.id === 'p2' ? 18 : product.id === 'p3' ? 64 : 12;
-                const usdEstimate = (parseFloat(product.price) * 0.70).toFixed(2);
 
-                return (
-                  <div 
-                    key={product.id} 
-                    className="group rounded-xl border border-neutral-200 bg-white overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow relative"
-                  >
-                    {/* Top image wrapper */}
-                    <div className="relative h-48 bg-neutral-100 overflow-hidden">
-                      <img 
-                        src={img} 
-                        alt={product.title} 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      <span className="absolute top-3 right-3 rounded-full bg-neutral-900/90 px-3 py-1 text-xs font-black text-amber-400 tracking-wider">
-                        {product.price} CELO
-                      </span>
-                    </div>
+            {/* Trusted indicators */}
+            <div className="pt-6 border-t border-neutral-900 flex flex-wrap gap-x-10 gap-y-4 text-xs text-neutral-550 font-bold uppercase tracking-wider">
+              <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-emerald-500" /> 100% Funds Audited</span>
+              <span className="flex items-center gap-1.5"><ArrowRightLeft className="h-4 w-4 text-amber-400" /> Incremental Milestones</span>
+              <span className="flex items-center gap-1.5"><Database className="h-4 w-4 text-blue-400" /> Verified Carrier APIs</span>
+            </div>
+          </div>
 
-                    {/* Content details */}
-                    <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
-                      
-                      {/* Store title & details */}
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400">
-                            Store: {product.store?.name}
-                          </span>
-                          <span className="flex items-center gap-0.5 text-[9px] bg-emerald-50 border border-emerald-200 rounded px-1 text-emerald-800 font-bold">
-                            <ShieldCheck className="h-3 w-3" />
-                            Escrow Protected
-                          </span>
-                        </div>
+          {/* Right Column: Premium Marketing 3D Illustration */}
+          <div className="lg:col-span-5 relative flex justify-center">
+            <div className="relative rounded-3xl overflow-hidden border border-neutral-800 bg-neutral-900/20 shadow-2xl glow-glow max-w-md w-full aspect-square">
+              <img
+                src="/hero_secure_escrow.png"
+                alt="Secure Escrow Protection"
+                className="w-full h-full object-cover rounded-3xl"
+              />
 
-                        <h3 className="font-extrabold text-neutral-900 text-sm leading-snug group-hover:text-amber-500 transition-colors line-clamp-1">
-                          {product.title}
-                        </h3>
+              {/* Glassmorphic overlay badge */}
+              <div className="absolute bottom-4 left-4 right-4 glass-panel rounded-2xl p-4 flex items-center justify-between gap-3 bg-neutral-950/85 border border-neutral-800">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/25">
+                    <ShieldCheck className="h-5.5 w-5.5 text-amber-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-white leading-tight">Escrow Active</h4>
+                    <p className="text-[10px] text-neutral-450 mt-0.5 font-medium">Secured on Celo Smart Contract</p>
+                  </div>
+                </div>
+                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
+                  Audited
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-                        {/* Rating stars */}
-                        <div className="flex items-center gap-1.5">
-                          <div className="flex text-amber-500">
-                            {Array.from({ length: 5 }).map((_, idx) => (
-                              <Star 
-                                key={idx} 
-                                className={`h-3 w-3 ${idx < Math.floor(mockRating) ? 'fill-current' : 'text-neutral-200'}`} 
-                              />
-                            ))}
-                          </div>
-                          <span className="text-[10px] text-neutral-500 font-bold">({mockRating} / {mockSales} sales)</span>
-                        </div>
+      {/* 2. THE INTERACTIVE ESCROW FLOW SIMULATOR */}
+      <section className="py-24 px-6 sm:px-12 lg:px-24 bg-neutral-50 border-b border-neutral-200">
+        <div className="mx-auto max-w-5xl space-y-12">
 
-                        <p className="text-xs text-neutral-500 line-clamp-2 leading-relaxed pt-1">
-                          {product.description}
-                        </p>
+          <div className="text-center space-y-4 max-w-2xl mx-auto">
+            <h2 className="text-3xl font-black text-neutral-950 tracking-tight">
+              The 3-Stage Escrow Architecture
+            </h2>
+            <p className="text-xs sm:text-sm text-neutral-500 leading-relaxed">
+              Click through the stages below to simulate how the Vendly smart contract coordinates payments automatically based on logistics.
+            </p>
+          </div>
+
+          {/* Timeline Node Selector */}
+          <div className="relative flex justify-between items-center max-w-3xl mx-auto px-6">
+            {/* Background progress bar line */}
+            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 bg-neutral-200 -z-0 rounded" />
+
+            {/* Active progress bar highlight */}
+            <div
+              className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-amber-500 -z-0 transition-all duration-500 rounded"
+              style={{ width: `${((activeStage - 1) / 2) * 100}%` }}
+            />
+
+            {/* Stages circles */}
+            {SIMULATOR_STAGES.map(s => {
+              const isActive = activeStage === s.stage;
+              const isPassed = activeStage > s.stage;
+
+              return (
+                <button
+                  key={s.stage}
+                  onClick={() => setActiveStage(s.stage)}
+                  className={`relative z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all duration-300 font-bold text-sm cursor-pointer ${isActive ? 'bg-amber-500 border-amber-600 text-white scale-110 shadow-lg shadow-amber-500/20' :
+                    isPassed ? 'bg-amber-100 border-amber-500 text-amber-800' :
+                      'bg-white border-neutral-300 text-neutral-400 hover:border-neutral-450 hover:text-neutral-750'
+                    }`}
+                >
+                  {isPassed ? '✓' : s.stage}
+
+                  {/* Floating label */}
+                  <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] font-extrabold uppercase tracking-wider text-neutral-400 whitespace-nowrap hidden sm:inline">
+                    Stage {s.stage}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Interactive Card Presentation */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch pt-6">
+
+            {/* Left Box: Explanation and data */}
+            <div className="lg:col-span-7 rounded-2xl border border-neutral-200 bg-white p-6 md:p-8 shadow-xs flex flex-col justify-between space-y-6">
+              <div className="space-y-4">
+                <div className="flex flex-wrap justify-between items-center gap-2">
+                  <span className="bg-amber-100 px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-amber-800">
+                    {SIMULATOR_STAGES[activeStage - 1].actor}
+                  </span>
+                  <span className={`text-xs font-black uppercase tracking-wide ${activeStage === 3 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {SIMULATOR_STAGES[activeStage - 1].payout}
+                  </span>
+                </div>
+
+                <h3 className="text-xl font-black text-neutral-900">
+                  {SIMULATOR_STAGES[activeStage - 1].title}
+                </h3>
+
+                <p className="text-xs sm:text-sm text-neutral-555 leading-relaxed">
+                  {SIMULATOR_STAGES[activeStage - 1].desc}
+                </p>
+              </div>
+
+              {/* Action Simulation Trigger */}
+              <div className="pt-4 border-t border-neutral-100 flex items-center justify-between gap-4">
+                <div className="text-[11px] text-neutral-400 font-medium">
+                  {activeStage === 3 ? "All stages completed! Reset simulator." : `Proceed to Stage ${activeStage + 1} simulation.`}
+                </div>
+                <button
+                  onClick={handleNextStage}
+                  disabled={isSimulating}
+                  className="rounded-lg bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-600 px-4 py-2.5 text-xs font-bold text-white transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  {isSimulating ? (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      Securing...
+                    </>
+                  ) : activeStage === 3 ? (
+                    <>
+                      Reset Simulation
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </>
+                  ) : (
+                    <>
+                      Trigger Next Stage
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Right Box: Interactive Visual Transaction Hub */}
+            <div className="lg:col-span-5 rounded-2xl border border-neutral-200 bg-white p-6 shadow-md flex flex-col justify-between relative overflow-hidden min-h-[340px]">
+
+              {/* Colored abstract background glows */}
+              <div className="absolute -right-20 -top-20 w-48 h-48 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+              <div className="absolute -left-20 -bottom-20 w-48 h-48 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
+
+              {activeStage === 1 && (
+                <div className="space-y-6 relative z-10">
+                  <div className="flex justify-between items-center border-b border-neutral-100 pb-3">
+                    <span className="text-[10px] text-amber-600 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                      <Lock className="h-3.5 w-3.5" />
+                      Smart Escrow Initialized
+                    </span>
+                    <span className="text-[10px] font-bold text-neutral-400">Step 1 of 3</span>
+                  </div>
+
+                  {/* Vault Graphic representation */}
+                  <div className="flex items-center justify-center py-4">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-amber-400/10 rounded-full blur-xl animate-pulse" />
+                      <div className="h-16 w-16 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center text-white shadow-md border-2 border-white relative z-10">
+                        <Lock className="h-8 w-8" />
                       </div>
-
-                      {/* Bottom action block */}
-                      <div className="flex items-center justify-between gap-4 pt-3 border-t border-neutral-100">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-neutral-400 font-medium">Est. Price</span>
-                          <span className="text-xs font-black text-neutral-700">${usdEstimate} USD</span>
-                        </div>
-
-                        <Link 
-                          href={`/products/${product.id}`}
-                          className="rounded-lg bg-amber-500 hover:bg-amber-600 px-3.5 py-2 text-xs font-bold text-white transition-colors cursor-pointer"
-                        >
-                          View Deal
-                        </Link>
-                      </div>
-
                     </div>
                   </div>
-                );
-              })}
+
+                  {/* Receipt breakdown */}
+                  <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-150 space-y-2 text-xs">
+                    <div className="flex justify-between font-bold text-neutral-800">
+                      <span>Total Deposit:</span>
+                      <span className="text-neutral-900">1.50 CELO ($1.05)</span>
+                    </div>
+                    <div className="h-px bg-neutral-205 my-1.5" />
+                    <div className="flex justify-between text-neutral-600">
+                      <span>30% Initial Release:</span>
+                      <span className="text-emerald-600 font-bold">+0.45 CELO</span>
+                    </div>
+                    <div className="flex justify-between text-neutral-600">
+                      <span>70% Securely Escrowed:</span>
+                      <span className="text-amber-600 font-bold">1.05 CELO</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeStage === 2 && (
+                <div className="space-y-6 relative z-10">
+                  <div className="flex justify-between items-center border-b border-neutral-100 pb-3">
+                    <span className="text-[10px] text-amber-600 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                      <Truck className="h-3.5 w-3.5" />
+                      Logistics Verification
+                    </span>
+                    <span className="text-[10px] font-bold text-neutral-400">Step 2 of 3</span>
+                  </div>
+
+                  {/* Route progress */}
+                  <div className="space-y-4 py-2">
+                    <div className="flex justify-between items-center text-[10px] text-neutral-500 font-bold">
+                      <span className="flex items-center gap-1"><Package className="h-3.5 w-3.5 text-neutral-400" /> Dispatched</span>
+                      <span className="bg-amber-100 text-amber-800 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wide">In Transit</span>
+                      <span className="flex items-center gap-1 font-medium text-neutral-300">Arrival</span>
+                    </div>
+
+                    {/* Visual Timeline Bar */}
+                    <div className="relative h-2 bg-neutral-100 rounded-full overflow-hidden border border-neutral-200">
+                      <div className="absolute left-0 top-0 bottom-0 w-1/2 bg-gradient-to-r from-amber-400 to-amber-500 rounded-full animate-pulse" />
+                    </div>
+                  </div>
+
+                  {/* Transit Information */}
+                  <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-150 space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-neutral-500">Carrier Partner:</span>
+                      <span className="font-bold text-neutral-850">DHL Express</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-500">Tracking Code:</span>
+                      <span className="font-mono font-bold text-neutral-850 text-[11px]">VN-982-CELO-77</span>
+                    </div>
+                    <div className="h-px bg-neutral-205 my-1.5" />
+                    <div className="flex justify-between text-neutral-600">
+                      <span>Cumulative Released:</span>
+                      <span className="text-emerald-600 font-bold">0.75 CELO (50%)</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeStage === 3 && (
+                <div className="space-y-6 relative z-10">
+                  <div className="flex justify-between items-center border-b border-neutral-100 pb-3">
+                    <span className="text-[10px] text-emerald-600 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      Escrow Fully Settled
+                    </span>
+                    <span className="text-[10px] font-bold text-neutral-400">Step 3 of 3</span>
+                  </div>
+
+                  {/* Certified Checkmark Seal */}
+                  <div className="flex items-center justify-center py-3">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-emerald-500/10 rounded-full blur-xl animate-pulse" />
+                      <div className="h-16 w-16 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-md border-2 border-white relative z-10">
+                        <CheckCircle className="h-8 w-8" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Settlement Certificate breakdown */}
+                  <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-150 space-y-2 text-xs">
+                    <div className="flex justify-between font-bold text-neutral-800">
+                      <span>Escrow Release:</span>
+                      <span className="text-emerald-600 font-bold">100% Disbursed</span>
+                    </div>
+                    <div className="h-px bg-neutral-205 my-1.5" />
+                    <div className="flex justify-between text-neutral-600">
+                      <span>Disbursed to Merchant:</span>
+                      <span className="text-neutral-800 font-medium">1.50 CELO</span>
+                    </div>
+                    <div className="flex justify-between text-neutral-600">
+                      <span>Smart Contract Status:</span>
+                      <span className="text-emerald-600 font-bold uppercase tracking-wider text-[9px]">Settled & Closed</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-4 border-t border-neutral-100 text-[10px] text-neutral-450 leading-tight flex items-center justify-between z-10 relative">
+                <span>Verified by Celo Blockchain Explorer</span>
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              </div>
             </div>
-          )}
-        </section>
 
-      </main>
+          </div>
+        </div>
+      </section>
 
-      {/* 4. Escrow Process Educational Banner */}
-      <section className="bg-neutral-50 border-t border-neutral-200 py-12 px-6 sm:px-12 lg:px-20 text-center">
-        <div className="mx-auto max-w-4xl space-y-8">
-          <div className="space-y-2">
-            <h2 className="text-2xl font-black text-neutral-900">How Vendly Protected Escrow Works</h2>
-            <p className="text-xs text-neutral-500 max-w-md mx-auto">
-              Smart contracts shield both buyers and sellers, releasing funds upon delivery verification.
+      {/* 3. VALUE PROPOSITION: Why Choose Vendly */}
+      <section className="py-24 px-6 sm:px-12 lg:px-24 bg-white">
+        <div className="mx-auto max-w-7xl space-y-16">
+
+          <div className="text-center space-y-4 max-w-2xl mx-auto">
+            <div className="inline-flex items-center gap-1 rounded-full bg-emerald-55 border border-emerald-200 px-3 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-800">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              100% Risk Free Commerce
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-black text-neutral-950 tracking-tight leading-none">
+              Engineered to Eliminate Buying & Selling Friction
+            </h2>
+            <p className="text-xs sm:text-sm text-neutral-500 leading-relaxed">
+              We leverage smart contracts to secure your hard-earned funds, eliminating fraud, courier spoofing, and merchant default risks.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-5 rounded-xl border border-neutral-200 text-left space-y-2">
-              <div className="h-7 w-7 rounded-full bg-amber-100 flex items-center justify-center text-xs font-bold text-amber-700">1</div>
-              <h4 className="font-bold text-sm text-neutral-900">Funds Escrowed (30%)</h4>
-              <p className="text-[11px] text-neutral-500">Buyer purchases item. Initial 30% payment is locked on-chain to verify liquidity and confirm the order to the merchant.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+
+            {/* Card 1 */}
+            <div className="glass-card rounded-2xl p-6 space-y-4">
+              <div className="h-10 w-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600">
+                <Layers className="h-5 w-5" />
+              </div>
+              <h3 className="font-extrabold text-neutral-900 text-base">Incremental Payouts</h3>
+              <p className="text-xs text-neutral-500 leading-relaxed">
+                By dividing payments into 30%, 20%, and 50% releases, we fund the merchant's logistics overhead while keeping the bulk of buyer assets protected.
+              </p>
             </div>
 
-            <div className="bg-white p-5 rounded-xl border border-neutral-200 text-left space-y-2">
-              <div className="h-7 w-7 rounded-full bg-amber-100 flex items-center justify-center text-xs font-bold text-amber-700">2</div>
-              <h4 className="font-bold text-sm text-neutral-900">Shipment Release (20%)</h4>
-              <p className="text-[11px] text-neutral-500">Seller ships products and inputs carrier tracking code. 20% milestone is released to fund logistics and handling.</p>
+            {/* Card 2 */}
+            <div className="glass-card rounded-2xl p-6 space-y-4">
+              <div className="h-10 w-10 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600">
+                <ShieldAlert className="h-5 w-5" />
+              </div>
+              <h3 className="font-extrabold text-neutral-900 text-base">Decentralized Disputes</h3>
+              <p className="text-xs text-neutral-500 leading-relaxed">
+                If an order goes awry, either party can initiate a dispute. Smart contracts freeze funds, allowing audited platform moderators to resolve claims fairly.
+              </p>
             </div>
 
-            <div className="bg-white p-5 rounded-xl border border-neutral-200 text-left space-y-2">
-              <div className="h-7 w-7 rounded-full bg-amber-100 flex items-center justify-center text-xs font-bold text-amber-700">3</div>
-              <h4 className="font-bold text-sm text-neutral-900">Final Settlement (50%)</h4>
-              <p className="text-[11px] text-neutral-500">Buyer confirms receipt or the courier delivery is verified. The final 50% is released, and feedback score accumulates.</p>
+            {/* Card 3 */}
+            <div className="glass-card rounded-2xl p-6 space-y-4">
+              <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+                <Truck className="h-5 w-5" />
+              </div>
+              <h3 className="font-extrabold text-neutral-900 text-base">Automated Carrier Sync</h3>
+              <p className="text-xs text-neutral-500 leading-relaxed">
+                We integrate directly with courier APIs. The smart contract automatically scans logistics status logs to trigger intermediate milestone releases.
+              </p>
+            </div>
+
+            {/* Card 4 */}
+            <div className="glass-card rounded-2xl p-6 space-y-4">
+              <div className="h-10 w-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+                <Wallet className="h-5 w-5" />
+              </div>
+              <h3 className="font-extrabold text-neutral-900 text-base">Celo Blockchain Security</h3>
+              <p className="text-xs text-neutral-500 leading-relaxed">
+                No centralized bank holds your money. Funds are locked in transparent, audited smart contracts, accessible only via on-chain signatures.
+              </p>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* 4. DEPARTMENT PREVIEW CARDS */}
+      <section className="py-24 px-6 sm:px-12 lg:px-24 bg-neutral-50 border-t border-b border-neutral-200">
+        <div className="mx-auto max-w-7xl space-y-16">
+
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="space-y-3">
+              <h2 className="text-3xl font-black text-neutral-950 tracking-tight leading-none">
+                Explore Verified Store Departments
+              </h2>
+              <p className="text-xs sm:text-sm text-neutral-500 max-w-lg">
+                Browse listings uploaded by registered merchants, fully covered by Vendly escrow smart contracts.
+              </p>
+            </div>
+            <Link
+              href="/marketplace"
+              className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline shrink-0 cursor-pointer"
+            >
+              Browse All Listings <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {categories.map((cat) => (
+              <div
+                key={cat.id}
+                className="group bg-white border border-neutral-200 rounded-2xl overflow-hidden flex flex-col justify-between hover:shadow-lg transition-all"
+              >
+                <div>
+                  <div className="h-44 overflow-hidden relative bg-neutral-100">
+                    <img
+                      src={cat.image}
+                      alt={cat.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+                  <div className="p-5 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-extrabold text-neutral-900 text-base group-hover:text-amber-500 transition-colors">{cat.name}</h3>
+                      <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider bg-neutral-55 px-2 py-0.5 rounded border border-neutral-150">{cat.count}</span>
+                    </div>
+                    <p className="text-xs text-neutral-555 leading-relaxed">{cat.desc}</p>
+                  </div>
+                </div>
+                <div className="p-5 pt-0">
+                  <Link
+                    href={`/marketplace?categoryId=${cat.id}`}
+                    className="w-full rounded-lg bg-neutral-900 hover:bg-amber-500 hover:text-white py-2.5 text-xs font-bold text-white transition-all flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                  >
+                    Browse Department
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+
+        </div>
+      </section>
+
+      {/* 5. PLATFORM STATISTICS / TRUST */}
+      <section className="py-20 px-6 sm:px-12 lg:px-24 bg-neutral-950 text-white text-center relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neutral-750 to-transparent" />
+
+        <div className="mx-auto max-w-5xl grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12 relative z-10">
+
+          <div className="space-y-1">
+            <h3 className="text-3xl sm:text-4xl font-black text-amber-400 tracking-tight">$4.2M+</h3>
+            <p className="text-[10px] sm:text-xs font-bold text-neutral-400 uppercase tracking-wider">Escrow Volume Secured</p>
+          </div>
+
+          <div className="space-y-1">
+            <h3 className="text-3xl sm:text-4xl font-black text-amber-400 tracking-tight">24 Hours</h3>
+            <p className="text-[10px] sm:text-xs font-bold text-neutral-400 uppercase tracking-wider">Average Settlement Time</p>
+          </div>
+
+          <div className="space-y-1">
+            <h3 className="text-3xl sm:text-4xl font-black text-amber-400 tracking-tight">100%</h3>
+            <p className="text-[10px] sm:text-xs font-bold text-neutral-400 uppercase tracking-wider">Dispute Resolution Rate</p>
+          </div>
+
+          <div className="space-y-1">
+            <h3 className="text-3xl sm:text-4xl font-black text-amber-400 tracking-tight">1,850+</h3>
+            <p className="text-[10px] sm:text-xs font-bold text-neutral-400 uppercase tracking-wider">Registered Merchants</p>
+          </div>
+
+        </div>
+      </section>
+
+      {/* 6. CALL TO ACTION & TESTIMONIALS */}
+      <section className="py-24 px-6 sm:px-12 lg:px-24 bg-white">
+        <div className="mx-auto max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
+
+          {/* Left Column: Testimonials */}
+          <div className="lg:col-span-6 space-y-6">
+            <h2 className="text-2xl sm:text-3xl font-black text-neutral-900 tracking-tight">
+              What Traders Say About Vendly
+            </h2>
+
+            <div className="space-y-6">
+              {/* Review 1 */}
+              <div className="bg-neutral-50 rounded-xl p-5 border border-neutral-200 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-xs font-bold text-amber-700">
+                      JS
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-neutral-900">Jared Smith</h4>
+                      <p className="text-[9px] text-neutral-500 font-medium">Electronics Merchant</p>
+                    </div>
+                  </div>
+                  <div className="flex text-amber-500">
+                    {Array.from({ length: 5 }).map((_, i) => <Star key={i} className="h-3 w-3 fill-current" />)}
+                  </div>
+                </div>
+                <p className="text-xs text-neutral-600 leading-relaxed italic">
+                  "As a seller, securing upfront liquidity is critical. Vendly's 30% instant release covers my logistics packaging costs, while the buyer feels secure knowing the rest of the funds are locked in Celo until delivery confirmation. It's a win-win."
+                </p>
+              </div>
+
+              {/* Review 2 */}
+              <div className="bg-neutral-50 rounded-xl p-5 border border-neutral-200 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-bold text-emerald-700">
+                      KM
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-neutral-900">Karen Miller</h4>
+                      <p className="text-[9px] text-neutral-500 font-medium">Digital Collector</p>
+                    </div>
+                  </div>
+                  <div className="flex text-amber-500">
+                    {Array.from({ length: 5 }).map((_, i) => <Star key={i} className="h-3 w-3 fill-current" />)}
+                  </div>
+                </div>
+                <p className="text-xs text-neutral-600 leading-relaxed italic">
+                  "I was always nervous buying domain names and digital assets from unknown sellers. With Vendly, my funds are held securely in escrow on-chain. Knowing I can open a dispute if the seller defaults gives me total peace of mind."
+                </p>
+              </div>
             </div>
           </div>
+
+          {/* Right Column: High-contrast call to action card */}
+          <div className="lg:col-span-6">
+            <div className="rounded-3xl bg-neutral-950 text-white p-8 md:p-10 border border-neutral-850 space-y-6 relative overflow-hidden shadow-2xl">
+              <div className="absolute -top-12 -right-12 h-40 w-40 rounded-full bg-amber-500/10 blur-2xl" />
+
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black text-white tracking-tight leading-none">
+                  Ready to Trade Securely?
+                </h3>
+                <p className="text-xs text-neutral-450 leading-relaxed">
+                  Join thousands of buyers and sellers trading physical products and digital services on Celo with complete protection.
+                </p>
+              </div>
+
+              <div className="space-y-4 pt-2">
+                <Link
+                  href="/marketplace"
+                  className="w-full rounded-xl bg-amber-500 hover:bg-amber-600 px-6 py-3.5 text-xs font-bold text-white text-center transition-colors block cursor-pointer"
+                >
+                  Explore Active Listings
+                </Link>
+
+                <div className="flex justify-between items-center text-[10px] text-neutral-550 uppercase font-bold tracking-wider pt-2 border-t border-neutral-850">
+                  <span className="flex items-center gap-1"><Lock className="h-3.5 w-3.5 text-emerald-500" /> SECURE SMART CONTRACTS</span>
+                  <span className="flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5 text-amber-400" /> ZERO DEPOSIT FEES</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-neutral-200 py-6 text-center text-xs text-neutral-400">
-        <div className="mx-auto max-w-7xl px-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <p>© 2026 Vendly Escrow Marketplace. Built on Celo.</p>
-          <div className="flex gap-4">
-            <a href="#" className="hover:underline">Terms of Service</a>
-            <a href="#" className="hover:underline">Privacy Policy</a>
-            <a href="#" className="hover:underline">Escrow Audits</a>
+      <footer className="bg-white border-t border-neutral-200 py-12 px-6 text-center text-xs text-neutral-400">
+        <div className="mx-auto max-w-7xl flex flex-col md:flex-row justify-between items-center gap-6">
+          <div className="space-y-1 text-left">
+            <p className="font-extrabold text-neutral-900 tracking-tighter text-sm">VENDLY ESCROW</p>
+            <p className="text-[11px] text-neutral-500">Decentralized, incremental-release escrow commerce on Celo.</p>
           </div>
+
+          <div className="flex flex-wrap gap-x-6 gap-y-2 font-semibold">
+            <a href="#" className="hover:text-neutral-900 transition-colors">Smart Contract Audit</a>
+            <a href="#" className="hover:text-neutral-900 transition-colors">Developer SDK</a>
+            <a href="#" className="hover:text-neutral-900 transition-colors">Privacy & Security</a>
+            <a href="#" className="hover:text-neutral-900 transition-colors">Moderator Guidelines</a>
+          </div>
+        </div>
+
+        <div className="mx-auto max-w-7xl pt-8 mt-8 border-t border-neutral-100 flex flex-col sm:flex-row justify-between items-center gap-4 text-[11px] text-neutral-450">
+          <p>© 2026 Vendly Protocol. All rights reserved.</p>
+          <p>Built with passion for the Celo Ecosystem.</p>
         </div>
       </footer>
     </div>
-  );
-}
-
-export default function Home() {
-  return (
-    <Suspense fallback={
-      <div className="flex flex-col min-h-screen bg-white text-neutral-900 justify-center items-center">
-        <RefreshCw className="h-8 w-8 animate-spin text-amber-500" />
-      </div>
-    }>
-      <MarketplaceContent />
-    </Suspense>
   );
 }

@@ -1,13 +1,27 @@
+/**
+ * Header.tsx — Desktop Navigation Header
+ * ─────────────────────────────────────────────────────────────────
+ * Full Amazon-style header rendered ONLY on desktop (md+).
+ * On mobile, see:  MobileTopBar.tsx  (top bar)
+ *                  BottomNav.tsx     (bottom tab bar)
+ *
+ * Contains:
+ *  - Thin top utility/announcement banner with role switcher
+ *  - Logo, full category search, wallet connect, sign-in/out
+ *  - Sub-navigation category bar
+ *  - Auth modal (sign-in + registration)
+ * ─────────────────────────────────────────────────────────────────
+ */
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { apiRequest, saveToken, removeToken } from '../utils/api';
 import { ShoppingBag, ShieldAlert, Store, User, LogOut, KeyRound, Search, ChevronDown, HelpCircle, Lock, Menu, Bell } from 'lucide-react';
 
-export default function Header() {
+function HeaderContent() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -61,7 +75,7 @@ export default function Header() {
     const query = new URLSearchParams();
     if (headerSearch) query.append('search', headerSearch);
     if (headerCategory) query.append('categoryId', headerCategory);
-    router.push(`/?${query.toString()}`);
+    router.push(`/marketplace?${query.toString()}`);
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -144,7 +158,7 @@ export default function Header() {
         });
         saveToken(loginRes.data.accessToken);
       }
-      
+
       await loadProfile();
       router.push('/dashboard');
       setTimeout(() => {
@@ -158,8 +172,13 @@ export default function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-white border-b border-neutral-200">
-      
+    /*
+     * hidden md:block — this entire header is hidden on mobile screens.
+     * On mobile, MobileTopBar (top) + BottomNav (bottom) handle navigation.
+     * On desktop (md+), this full Amazon-style header is shown.
+     */
+    <header className="hidden md:block sticky top-0 z-50 w-full bg-white border-b border-neutral-200">
+
       {/* 1. Thin Top Utility Banner */}
       <div className="w-full bg-neutral-900 py-1.5 px-4 text-white text-[11px] sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl flex flex-col sm:flex-row justify-between items-center gap-2">
@@ -179,25 +198,22 @@ export default function Header() {
             <div className="flex items-center gap-1 bg-neutral-800 rounded-md p-0.5 border border-neutral-700">
               <button
                 onClick={() => quickSignIn('BUYER')}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                  currentUser?.role === 'BUYER' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white'
-                }`}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${currentUser?.role === 'BUYER' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white'
+                  }`}
               >
                 Buyer
               </button>
               <button
                 onClick={() => quickSignIn('SELLER')}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                  currentUser?.role === 'SELLER' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white'
-                }`}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${currentUser?.role === 'SELLER' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white'
+                  }`}
               >
                 Seller
               </button>
               <button
                 onClick={() => quickSignIn('ADMIN')}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                  currentUser?.role === 'ADMIN' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white'
-                }`}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${currentUser?.role === 'ADMIN' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white'
+                  }`}
               >
                 Admin
               </button>
@@ -209,7 +225,7 @@ export default function Header() {
       {/* 2. Main High-Visibility Header */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3.5">
         <div className="flex flex-col md:flex-row items-center gap-4 justify-between">
-          
+
           {/* Logo */}
           <div className="flex items-center justify-between w-full md:w-auto">
             <Link href="/" className="flex items-center gap-2 group">
@@ -230,8 +246,8 @@ export default function Header() {
           </div>
 
           {/* Large Amazon-Style Search Form */}
-          <form 
-            onSubmit={handleSearchSubmit} 
+          <form
+            onSubmit={handleSearchSubmit}
             className="flex-1 w-full max-w-2xl flex items-center border-2 border-neutral-350 hover:border-amber-500 focus-within:border-amber-500 rounded-lg overflow-hidden transition-colors"
           >
             <div className="relative bg-neutral-100 border-r border-neutral-350">
@@ -256,8 +272,8 @@ export default function Header() {
               className="flex-1 h-10 px-4 text-sm text-neutral-900 bg-white placeholder-neutral-400 focus:outline-none"
             />
 
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               className="h-10 px-6 bg-amber-500 hover:bg-amber-600 text-white font-bold transition-colors flex items-center justify-center cursor-pointer"
             >
               <Search className="h-4 w-4" />
@@ -266,19 +282,19 @@ export default function Header() {
 
           {/* Right Controls */}
           <div className="hidden md:flex items-center gap-4">
-            
+
             {/* Wallet Connect */}
-            <ConnectButton showBalance={false} />
+            {/* <ConnectButton showBalance={false} /> */}
 
             {/* Profile Dropdown or Sign In */}
             {currentUser ? (
               <div className="flex items-center gap-3">
                 <div className="flex flex-col text-right">
                   <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider">
-                    Hello, {currentUser.name.split(' ')[0]}
+                    Hello, `${currentUser.name ? currentUser.name.split(' ')[0] : 'User'}`
                   </span>
-                  <Link 
-                    href="/dashboard" 
+                  <Link
+                    href="/dashboard"
                     className="text-xs font-bold text-neutral-800 hover:text-amber-500 flex items-center gap-0.5"
                   >
                     My Account
@@ -298,7 +314,7 @@ export default function Header() {
                   <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-amber-500 rounded-full" />
                 </Link>
 
-                <button 
+                <button
                   onClick={handleLogout}
                   className="p-2 hover:bg-neutral-100 rounded-full text-neutral-500 hover:text-neutral-900 transition-colors"
                   title="Logout Account"
@@ -307,7 +323,7 @@ export default function Header() {
                 </button>
               </div>
             ) : (
-              <button 
+              <button
                 onClick={() => { setIsRegister(false); setShowAuthModal(true); }}
                 className="flex items-center gap-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 px-4 py-2 text-xs font-bold text-white transition-colors cursor-pointer"
               >
@@ -322,37 +338,40 @@ export default function Header() {
       {/* 3. Sub-Navigation Category bar */}
       <div className="w-full bg-neutral-50 border-t border-neutral-200 py-2 px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl flex justify-between items-center text-xs font-semibold text-neutral-600">
-          
+
           <div className="flex items-center gap-6 overflow-x-auto scrollbar-none py-1">
             <span className="flex items-center gap-1.5 text-neutral-900 font-bold hover:text-amber-500 cursor-pointer">
               <Menu className="h-4 w-4 text-amber-500" />
               All Departments
             </span>
 
-            <Link href="/" className={`hover:text-neutral-900 transition-colors ${pathname === '/' ? 'text-amber-600 font-bold' : ''}`}>
+            <Link href="/marketplace" className={`hover:text-neutral-900 transition-colors ${pathname === '/marketplace' ? 'text-amber-600 font-bold' : ''}`}>
               Marketplace
             </Link>
-            
+
             {categories.map(cat => (
-              <Link 
-                key={cat.id} 
-                href={`/?categoryId=${cat.id}`} 
+              <Link
+                key={cat.id}
+                href={`/marketplace?categoryId=${cat.id}`}
                 className={`hover:text-neutral-900 transition-colors ${searchParams.get('categoryId') === cat.id ? 'text-amber-600 font-bold' : ''}`}
               >
                 {cat.name}
               </Link>
             ))}
 
-            <Link href="/?search=Special" className="text-rose-600 hover:text-rose-700 transition-colors font-bold">
+            <Link href="/marketplace?search=Special" className="text-rose-600 hover:text-rose-700 transition-colors font-bold">
               Today's Hot Deals
             </Link>
           </div>
 
           <div className="hidden lg:flex items-center gap-6 text-neutral-500">
-            {currentUser && (
+          {currentUser && (
               <>
                 <Link href="/dashboard" className={`hover:text-neutral-900 transition ${pathname === '/dashboard' ? 'text-amber-600 font-bold' : ''}`}>
                   Dashboard
+                </Link>
+                <Link href="/wallet" className={`hover:text-neutral-900 transition flex items-center gap-1 ${pathname === '/wallet' ? 'text-amber-600 font-bold' : ''}`}>
+                  My Wallet
                 </Link>
                 {currentUser.role === 'SELLER' && (
                   <Link href="/store" className={`hover:text-neutral-900 transition ${pathname === '/store' ? 'text-amber-600 font-bold' : ''}`}>
@@ -366,7 +385,7 @@ export default function Header() {
                 )}
               </>
             )}
-            
+
             <a href="#" className="hover:text-neutral-900 flex items-center gap-1 transition-colors">
               <ShieldAlert className="h-3.5 w-3.5 text-emerald-600" />
               Buyer Protection Policy
@@ -389,7 +408,7 @@ export default function Header() {
                   {isRegister ? 'Start secure trading on the Celo network' : 'Access your purchases, store, and alerts'}
                 </p>
               </div>
-              <button 
+              <button
                 onClick={() => setShowAuthModal(false)}
                 className="text-neutral-400 hover:text-neutral-900 text-lg font-semibold h-8 w-8 hover:bg-neutral-100 rounded-full flex items-center justify-center transition-colors cursor-pointer"
               >
@@ -407,44 +426,44 @@ export default function Header() {
               {isRegister && (
                 <div>
                   <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Full Name</label>
-                  <input 
-                    type="text" 
-                    required 
+                  <input
+                    type="text"
+                    required
                     placeholder="e.g. Alice Smith"
-                    value={name} 
+                    value={name}
                     onChange={e => setName(e.target.value)}
-                    className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" 
+                    className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
                   />
                 </div>
               )}
               <div>
                 <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Email Address</label>
-                <input 
-                  type="email" 
-                  required 
+                <input
+                  type="email"
+                  required
                   placeholder="e.g. buyer@vendly.com"
-                  value={email} 
+                  value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" 
+                  className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Password</label>
-                <input 
-                  type="password" 
-                  required 
+                <input
+                  type="password"
+                  required
                   placeholder="Minimum 6 characters"
-                  value={password} 
+                  value={password}
                   onChange={e => setPassword(e.target.value)}
-                  className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" 
+                  className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
                 />
               </div>
-              
+
               {isRegister && (
                 <div>
                   <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Default Marketplace Role</label>
-                  <select 
-                    value={role} 
+                  <select
+                    value={role}
                     onChange={e => setRole(e.target.value)}
                     className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 cursor-pointer"
                   >
@@ -454,8 +473,8 @@ export default function Header() {
                 </div>
               )}
 
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={loading}
                 className="w-full rounded-lg bg-amber-500 hover:bg-amber-600 py-3 text-sm font-bold text-white transition-colors mt-6 cursor-pointer"
               >
@@ -480,5 +499,13 @@ export default function Header() {
         </div>
       )}
     </header>
+  );
+}
+
+export default function Header() {
+  return (
+    <Suspense fallback={<div className="h-16 bg-white border-b border-neutral-200" />}>
+      <HeaderContent />
+    </Suspense>
   );
 }

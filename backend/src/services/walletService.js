@@ -5,7 +5,7 @@ const encryption = require('../utils/encryption');
 /**
  * Creates and encrypts a Celo wallet for a user.
  */
-async function createWalletForUser(userId) {
+async function createWalletForUser(userId, username) {
   // Prevent duplicate wallet creation
   const existing = await Wallet.findOne({ where: { userId } });
   if (existing) return existing;
@@ -15,6 +15,7 @@ async function createWalletForUser(userId) {
 
   const wallet = await Wallet.create({
     userId,
+    username: username || null,
     address: celoWallet.address,
     encryptedPrivateKey: encryptedKey,
     isActive: true
