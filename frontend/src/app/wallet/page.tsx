@@ -53,8 +53,8 @@ export default function WalletPage() {
     try {
       const [profRes, balRes, histRes] = await Promise.all([
         apiRequest('/auth/profile'),
-        apiRequest('/wallet/balance'),
-        apiRequest('/wallet/history'),
+        apiRequest('/wallets/balance'),
+        apiRequest('/wallets/history'),
       ]);
       if (profRes.success) setProfile(profRes.data);
       if (balRes.success) setWalletData(balRes.data);
@@ -90,7 +90,7 @@ export default function WalletPage() {
     if (!recipientAddress || !amount) return showToast('Fill in all fields', false);
     setSubmitting(true);
     try {
-      const res = await apiRequest('/wallet/transfer', {
+      const res = await apiRequest('/wallets/transfer', {
         method: 'POST',
         body: JSON.stringify({ receiverAddress: recipientAddress, token: selectedToken, amount: parseFloat(amount) }),
       });
@@ -112,7 +112,7 @@ export default function WalletPage() {
     if (!withdrawAddress || !amount) return showToast('Fill in all fields', false);
     setSubmitting(true);
     try {
-      const res = await apiRequest('/wallet/withdraw', {
+      const res = await apiRequest('/wallets/withdraw', {
         method: 'POST',
         body: JSON.stringify({ destinationAddress: withdrawAddress, token: selectedToken, amount: parseFloat(amount) }),
       });

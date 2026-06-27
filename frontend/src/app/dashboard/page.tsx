@@ -3,64 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/Header';
 import { apiRequest } from '../../utils/api';
-import { useAccount, useReadContract, useWriteContract } from 'wagmi';
-import { ethers } from 'ethers';
 import { Bell, Wallet, ShieldAlert, CheckCircle, Package, Truck, ArrowRight, ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 
-const ESCROW_ABI = [
-  {
-    "inputs": [{ "internalType": "bytes32", "name": "orderId", "type": "bytes32" }],
-    "name": "releaseThirtyPercent",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "bytes32", "name": "orderId", "type": "bytes32" }],
-    "name": "releaseTwentyPercent",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "bytes32", "name": "orderId", "type": "bytes32" }],
-    "name": "releaseFinalFiftyPercent",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "bytes32", "name": "orderId", "type": "bytes32" }],
-    "name": "openDispute",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "bytes32", "name": "orderId", "type": "bytes32" }],
-    "name": "escrows",
-    "outputs": [
-      { "internalType": "bytes32", "name": "orderId", "type": "bytes32" },
-      { "internalType": "address", "name": "buyer", "type": "address" },
-      { "internalType": "address", "name": "seller", "type": "address" },
-      { "internalType": "address", "name": "tokenAddress", "type": "address" },
-      { "internalType": "uint256", "name": "totalAmount", "type": "uint256" },
-      { "internalType": "uint8", "name": "stage", "type": "uint8" },
-      { "internalType": "bool", "name": "isDisputed", "type": "bool" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  }
-];
-
-const ESCROW_ADDRESS = process.env.NEXT_PUBLIC_ESCROW_ADDRESS || '0x0000000000000000000000000000000000000000';
 
 export default function Dashboard() {
-  const { address, isConnected } = useAccount();
-  const { writeContract, data: txHash } = useWriteContract();
-
   const [profile, setProfile] = useState<any>(null);
+  const [walletData, setWalletData] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,10 +18,12 @@ export default function Dashboard() {
 
   const fetchProfile = async () => {
     try {
-      const res = await apiRequest('/auth/profile');
-      if (res.success) {
-        setProfile(res.data);
-      }
+      const [profRes, walRes] = await Promise.all([
+        apiRequest('/auth/profile'),
+        apiRequest('/wallets/balance').catch(() => null)
+      ]);
+      if (profRes.success) setProfile(profRes.data);
+      if (walRes?.success) setWalletData(walRes.data);
     } catch (err) {
       console.error(err);
     }
@@ -80,53 +31,30 @@ export default function Dashboard() {
 
   const fetchOrders = async () => {
     try {
-      const res = await apiRequest('/orders/my-orders');
+      const res = await apiRequest('/orders');
       if (res.success) {
-        setOrders(res.data);
-        res.data.forEach((order: any) => {
-          fetchEscrowStateFromChain(order.id, res.data);
+        const ordersData = Array.isArray(res.data) ? res.data : [];
+        setOrders(ordersData);
+        ordersData.forEach((order: any) => {
+          let stage = 0;
+          if (order.status === 'PAID') stage = 1;
+          if (order.status === 'SHIPPED') stage = 2;
+          if (order.status === 'DELIVERED') stage = 3;
+          setEscrowStates(prev => ({
+            ...prev,
+            [order.id]: {
+              stage,
+              isDisputed: order.status === 'DISPUTED',
+              totalAmount: order.totalAmount,
+              isSimulated: true
+            }
+          }));
         });
       }
     } catch (err) {
       console.error(err);
     }
   };
-
-  const fetchEscrowStateFromChain = async (orderId: string, currentOrders: any[]) => {
-    try {
-      const orderIdBytes = ethers.id(orderId);
-      const provider = new ethers.JsonRpcProvider('https://alfajores-forno.celo-testnet.org');
-      const contract = new ethers.Contract(ESCROW_ADDRESS, ESCROW_ABI, provider);
-      const escrowRecord = await contract.escrows(orderIdBytes);
-      
-      setEscrowStates(prev => ({
-        ...prev,
-        [orderId]: {
-          stage: escrowRecord.stage,
-          isDisputed: escrowRecord.isDisputed,
-          totalAmount: ethers.formatEther(escrowRecord.totalAmount),
-          isSimulated: false
-        }
-      }));
-    } catch (err) {
-      // Fallback simulation: local storage mock mode
-      const order = currentOrders.find(o => o.id === orderId);
-      if (order) {
-        let simulatedStage = 0;
-        if (order.status === 'PAID') simulatedStage = 1;
-        if (order.status === 'SHIPPED') simulatedStage = 2;
-        if (order.status === 'DELIVERED') simulatedStage = 3;
-
-        setEscrowStates(prev => ({
-          ...prev,
-          [orderId]: {
-            stage: simulatedStage,
-            isDisputed: order.status === 'DISPUTED',
-            totalAmount: order.totalAmount,
-            isSimulated: true
-          }
-        }));
-      }
     }
   };
 
@@ -152,105 +80,30 @@ export default function Dashboard() {
   }, []);
 
   const handleEscrowRelease = async (orderId: string, stageToRelease: number) => {
-    const isSimulated = escrowStates[orderId]?.isSimulated;
-
     try {
-      if (isSimulated) {
-        const nextStatus = stageToRelease === 2 ? 'SHIPPED' : 'DELIVERED';
-        
-        // Update mock database directly
-        const dbStr = localStorage.getItem('vendly_mock_db');
-        if (dbStr) {
-          const db = JSON.parse(dbStr);
-          const order = db.orders.find((o: any) => o.id === orderId);
-          if (order) {
-            order.status = nextStatus;
-            
-            // Add notification
-            db.notifications.unshift({
-              id: 'n' + (db.notifications.length + 1),
-              userId: order.userId,
-              message: `Milestone Stage ${stageToRelease} release confirmed (Sandbox). Status: ${nextStatus}.`,
-              createdAt: new Date().toISOString()
-            });
-
-            // If stage 2 release, notify seller
-            const store = db.stores.find((s: any) => s.id === order.storeId);
-            if (store) {
-              db.notifications.unshift({
-                id: 'n' + (db.notifications.length + 1),
-                userId: store.userId,
-                message: `Buyer approved Milestone ${stageToRelease} release on order ${order.id}. Payout processed.`,
-                createdAt: new Date().toISOString()
-              });
-            }
-
-            localStorage.setItem('vendly_mock_db', JSON.stringify(db));
-          }
-        }
-        
-        alert(`Sandbox Mode: Milestone Stage ${stageToRelease} release simulated successfully!`);
-        await fetchOrders();
-        await fetchNotifications();
-        return;
-      }
-
-      // Web3 Chain Release
-      const orderIdBytes = ethers.id(orderId);
-      let functionName = 'releaseThirtyPercent';
-      if (stageToRelease === 2) functionName = 'releaseTwentyPercent';
-      if (stageToRelease === 3) functionName = 'releaseFinalFiftyPercent';
-
-      writeContract({
-        address: ESCROW_ADDRESS as `0x${string}`,
-        abi: ESCROW_ABI,
-        functionName,
-        args: [orderIdBytes as `0x${string}`]
+      const nextStatus = stageToRelease === 2 ? 'SHIPPED' : 'DELIVERED';
+      await apiRequest(`/orders/${orderId}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: nextStatus })
       });
-
-      setTimeout(() => {
-        fetchOrders();
-      }, 4000);
+      await fetchOrders();
+      await fetchNotifications();
     } catch (err: any) {
-      alert(`Escrow release transaction failed: ${err.message}`);
+      alert(`Release failed: ${err.message}`);
     }
   };
 
   const handleOpenDispute = async (orderId: string) => {
     const reason = disputeNotes[orderId] || 'Items not received or damaged.';
-    const isSimulated = escrowStates[orderId]?.isSimulated;
-
     try {
-      // 1. Backend dispute registration
-      const disputeRes = await apiRequest('/disputes', {
+      await apiRequest('/disputes', {
         method: 'POST',
         body: JSON.stringify({ orderId, reason })
       });
-
-      if (!disputeRes.success) {
-        alert(`Failed creating dispute: ${disputeRes.message}`);
-        return;
-      }
-
-      // 2. Onchain dispute registration if real Web3
-      if (!isSimulated) {
-        const orderIdBytes = ethers.id(orderId);
-        writeContract({
-          address: ESCROW_ADDRESS as `0x${string}`,
-          abi: ESCROW_ABI,
-          functionName: 'openDispute',
-          args: [orderIdBytes as `0x${string}`]
-        });
-      } else {
-        alert('Sandbox Mode: Dispute opened and escrow locked.');
-      }
-
-      setTimeout(() => {
-        fetchOrders();
-        fetchNotifications();
-      }, 2000);
+      await fetchOrders();
+      await fetchNotifications();
     } catch (err: any) {
-      alert(`Dispute registration error: ${err.message}`);
+      alert(`Dispute error: ${err.message}`);
     }
   };
 
@@ -275,20 +128,22 @@ export default function Dashboard() {
         {/* Welcome Section */}
         <section className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-neutral-200 pb-6">
           <div>
-            <h1 className="text-2xl font-black text-neutral-950">Welcome Back, {profile?.name || 'User'}</h1>
+            <h1 className="text-2xl font-black text-neutral-950">Welcome Back, {profile?.fullName?.split(' ')[0] || profile?.username || 'User'}</h1>
             <p className="text-xs text-neutral-500 mt-1">
               Account role: <span className="text-amber-600 font-bold">{profile?.role}</span> | Manage your buying escrows, dispute cases, and delivery milestones.
             </p>
           </div>
 
-          {/* Web3 Wallet Info */}
+          {/* Custodial Wallet Info */}
           <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 space-y-1">
             <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
-              <span className={`h-2.5 w-2.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-              Wallet Status
+              <span className={`h-2.5 w-2.5 rounded-full ${walletData ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+              Custodial Wallet
             </h3>
             <p className="text-xs font-mono font-bold text-neutral-700">
-              {isConnected ? `${address?.substring(0, 16)}...${address?.substring(address.length - 8)}` : 'Wallet Disconnected'}
+              {walletData?.address
+                ? `${walletData.address.substring(0, 16)}...${walletData.address.substring(walletData.address.length - 8)}`
+                : 'Wallet being created...'}
             </p>
           </div>
         </section>

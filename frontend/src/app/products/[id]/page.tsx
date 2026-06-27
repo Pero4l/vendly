@@ -4,33 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Header from '../../../components/Header';
 import { apiRequest } from '../../../utils/api';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { ethers } from 'ethers';
 import { ShoppingCart, ShieldCheck, RefreshCw, Star, ArrowLeft, Truck, Package, ShieldAlert, Award, ChevronRight, HelpCircle } from 'lucide-react';
 import Link from 'next/link';
-
-const MARKETPLACE_ABI = [
-  {
-    "inputs": [
-      { "internalType": "uint256", "name": "listingId", "type": "uint256" },
-      { "internalType": "uint256", "name": "quantity", "type": "uint256" },
-      { "internalType": "bytes32", "name": "orderId", "type": "bytes32" }
-    ],
-    "name": "purchase",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  }
-];
-
-const MARKETPLACE_ADDRESS = process.env.NEXT_PUBLIC_MARKETPLACE_ADDRESS || '0x0000000000000000000000000000000000000000';
 
 export default function ProductDetails() {
   const { id } = useParams();
   const router = useRouter();
-  const { isConnected } = useAccount();
-  const { writeContract, data: txHash, error: txError, isPending: writePending } = useWriteContract();
-  
+
   const [product, setProduct] = useState<any>(null);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -38,10 +18,6 @@ export default function ProductDetails() {
   const [statusMessage, setStatusMessage] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [showEscrowDetails, setShowEscrowDetails] = useState(true);
-
-  const { isLoading: txConfirming } = useWaitForTransactionReceipt({
-    hash: txHash,
-  });
 
   const fetchProduct = async () => {
     try {
@@ -61,55 +37,6 @@ export default function ProductDetails() {
   }, [id]);
 
   const handlePurchase = async () => {
-    if (!isConnected) {
-      alert('Please connect your Web3 wallet first.');
-      return;
-    }
-
-    setPurchaseLoading(true);
-    setStatusMessage('Creating pending order in database...');
-    setErrorMsg('');
-
-    try {
-      const orderRes = await apiRequest('/orders', {
-        method: 'POST',
-        body: JSON.stringify({
-          items: [{ productId: product.id, quantity }],
-          shippingAddress: '123 Celo Developer Blvd, Web3 City'
-        })
-      });
-
-      if (!orderRes.success) {
-        throw new Error(orderRes.message || 'Failed to create order');
-      }
-
-      const orderId = orderRes.data.id;
-      const orderIdBytes = ethers.id(orderId);
-      const totalCostWei = ethers.parseEther((parseFloat(product.price) * quantity).toString());
-
-      setStatusMessage('Requesting signature to lock funds in Celo Escrow...');
-      
-      writeContract({
-        address: MARKETPLACE_ADDRESS as `0x${string}`,
-        abi: MARKETPLACE_ABI,
-        functionName: 'purchase',
-        args: [
-          BigInt(1),
-          BigInt(quantity),
-          orderIdBytes as `0x${string}`
-        ],
-        value: totalCostWei
-      });
-
-      localStorage.setItem('pending_order_id', orderId);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Purchase process failed');
-      setPurchaseLoading(false);
-      setStatusMessage('');
-    }
-  };
-
-  const handleSandboxPurchase = async () => {
     setPurchaseLoading(true);
     setStatusMessage('Sandbox Mode: Initializing order...');
     setErrorMsg('');
@@ -160,15 +87,6 @@ export default function ProductDetails() {
     }
   };
 
-  useEffect(() => {
-    if (txHash && !txConfirming) {
-      const pendingOrderId = localStorage.getItem('pending_order_id');
-      if (pendingOrderId) {
-        confirmPaymentOnBackend(txHash, pendingOrderId);
-        localStorage.removeItem('pending_order_id');
-      }
-    }
-  }, [txHash, txConfirming]);
 
   if (loading) {
     return (
@@ -414,16 +332,8 @@ export default function ProductDetails() {
                 </div>
               )}
 
-              {txHash && (
-                <div className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-700 border border-emerald-200 break-all">
-                  On-chain signature captured: <br />
-                  <a href={`https://alfajores.celoscan.io/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="underline font-mono font-bold text-emerald-800">
-                    {txHash.substring(0, 22)}...
-                  </a>
-                </div>
-              )}
 
-              {/* Main Actions */}
+              {/* Main Action */}
               <div className="space-y-2">
                 <button
                   onClick={handlePurchase}
@@ -431,17 +341,7 @@ export default function ProductDetails() {
                   className="w-full flex items-center justify-center gap-2 rounded-lg bg-amber-500 hover:bg-amber-600 py-3 text-xs font-bold text-white transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   <ShoppingCart className="h-4 w-4" />
-                  {product.quantity === 0 ? 'Out of Stock' : 'Checkout via Web3 Wallet'}
-                </button>
-
-                {/* Sandbox Mock fallback button */}
-                <button
-                  onClick={handleSandboxPurchase}
-                  disabled={purchaseLoading || product.quantity === 0}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-neutral-300 hover:border-neutral-400 bg-neutral-50 hover:bg-neutral-100 py-2.5 text-xs font-bold text-neutral-700 transition-all disabled:opacity-50 cursor-pointer"
-                  title="Test purchase instantly without wallet signature"
-                >
-                  <span>Offline Sandbox Buy</span>
+                  {purchaseLoading ? statusMessage || 'Processing...' : product.quantity === 0 ? 'Out of Stock' : 'Buy Now — Escrow Protected'}
                 </button>
               </div>
 

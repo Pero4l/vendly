@@ -17,8 +17,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { apiRequest, saveToken, removeToken } from '../utils/api';
+import { apiRequest, saveToken, removeToken, saveUser, removeUser } from '../utils/api';
 import { ShoppingBag, ShieldAlert, Store, User, LogOut, KeyRound, Search, ChevronDown, HelpCircle, Lock, Menu, Bell } from 'lucide-react';
 
 function HeaderContent() {
@@ -29,12 +28,13 @@ function HeaderContent() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
-  const [name, setName] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('BUYER');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [registerSuccess, setRegisterSuccess] = useState(false);
 
   // Search States inside Header
   const [headerSearch, setHeaderSearch] = useState('');
@@ -86,24 +86,19 @@ function HeaderContent() {
       if (isRegister) {
         const res = await apiRequest('/auth/register', {
           method: 'POST',
-          body: JSON.stringify({ name, email, password, role })
+          body: JSON.stringify({ fullName, username, email, password })
         });
         if (res.success) {
-          const loginRes = await apiRequest('/auth/login', {
-            method: 'POST',
-            body: JSON.stringify({ email, password })
-          });
-          saveToken(loginRes.data.accessToken);
-          loadProfile();
-          setShowAuthModal(false);
+          setRegisterSuccess(true);
         }
       } else {
         const loginRes = await apiRequest('/auth/login', {
           method: 'POST',
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({ identifier: email, password })
         });
         saveToken(loginRes.data.accessToken);
-        loadProfile();
+        if (loginRes.data.user) saveUser(loginRes.data.user);
+        await loadProfile();
         setShowAuthModal(false);
       }
     } catch (err: any) {
@@ -113,8 +108,10 @@ function HeaderContent() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await apiRequest('/auth/logout', { method: 'POST' }); } catch {}
     removeToken();
+    removeUser();
     setCurrentUser(null);
     router.push('/');
   };
@@ -241,7 +238,14 @@ function HeaderContent() {
 
             {/* Mobile Account trigger */}
             <div className="flex items-center gap-2 md:hidden">
-              <ConnectButton showBalance={false} />
+              {!currentUser && (
+                <button
+                  onClick={() => { setIsRegister(false); setShowAuthModal(true); }}
+                  className="text-xs font-bold text-neutral-600 border border-neutral-300 rounded-lg px-3 py-1.5"
+                >
+                  Sign In
+                </button>
+              )}
             </div>
           </div>
 
@@ -291,7 +295,7 @@ function HeaderContent() {
               <div className="flex items-center gap-3">
                 <div className="flex flex-col text-right">
                   <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider">
-                    Hello, `${currentUser.name ? currentUser.name.split(' ')[0] : 'User'}`
+                    Hello, {currentUser.fullName ? currentUser.fullName.split(' ')[0] : currentUser.username || 'User'}
                   </span>
                   <Link
                     href="/dashboard"
@@ -422,78 +426,65 @@ function HeaderContent() {
               </div>
             )}
 
-            <form onSubmit={handleAuth} className="mt-6 space-y-4 text-neutral-805">
-              {isRegister && (
-                <div>
-                  <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Full Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Alice Smith"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                  />
+            {registerSuccess ? (
+              <div className="mt-6 rounded-xl bg-emerald-50 border border-emerald-200 p-6 text-center space-y-3">
+                <div className="h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
+                  <KeyRound className="h-6 w-6 text-emerald-600" />
                 </div>
-              )}
-              <div>
-                <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Email Address</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. buyer@vendly.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                />
+                <p className="text-sm font-bold text-emerald-800">Check your inbox!</p>
+                <p className="text-xs text-emerald-700">We sent a verification link to <strong>{email}</strong>. Click it to activate your account.</p>
+                <button
+                  onClick={() => { setShowAuthModal(false); setRegisterSuccess(false); setIsRegister(false); }}
+                  className="mt-2 text-xs font-bold text-emerald-700 underline cursor-pointer"
+                >
+                  Back to Sign In
+                </button>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Password</label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Minimum 6 characters"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                />
-              </div>
-
-              {isRegister && (
+            ) : (
+              <form onSubmit={handleAuth} className="mt-6 space-y-4">
+                {isRegister && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Full Name</label>
+                      <input type="text" required placeholder="e.g. Alice Smith" value={fullName} onChange={e => setFullName(e.target.value)}
+                        className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Username</label>
+                      <input type="text" required placeholder="e.g. alice_smith (4–15 chars)" value={username} onChange={e => setUsername(e.target.value.toLowerCase())}
+                        className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" />
+                    </div>
+                  </>
+                )}
                 <div>
-                  <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Default Marketplace Role</label>
-                  <select
-                    value={role}
-                    onChange={e => setRole(e.target.value)}
-                    className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 cursor-pointer"
-                  >
-                    <option value="BUYER">Buyer (Purchase items using escrow protection)</option>
-                    <option value="SELLER">Seller (Upload products, manage orders & receive payouts)</option>
-                  </select>
+                  <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Email Address</label>
+                  <input type="email" required placeholder="e.g. buyer@vendly.com" value={email} onChange={e => setEmail(e.target.value)}
+                    className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" />
                 </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full rounded-lg bg-amber-500 hover:bg-amber-600 py-3 text-sm font-bold text-white transition-colors mt-6 cursor-pointer"
-              >
-                {loading ? 'Processing...' : isRegister ? 'Create Account' : 'Sign In'}
-              </button>
-            </form>
+                <div>
+                  <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Password</label>
+                  <input type="password" required placeholder="Minimum 6 characters" value={password} onChange={e => setPassword(e.target.value)}
+                    className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" />
+                </div>
+                <button type="submit" disabled={loading}
+                  className="w-full rounded-lg bg-amber-500 hover:bg-amber-600 py-3 text-sm font-bold text-white transition-colors mt-6 cursor-pointer disabled:opacity-60">
+                  {loading ? 'Processing...' : isRegister ? 'Create Account' : 'Sign In'}
+                </button>
+              </form>
+            )}
 
             <div className="mt-6 text-center text-xs text-neutral-500 border-t border-neutral-100 pt-4">
-              {isRegister ? (
+              {!registerSuccess && (isRegister ? (
                 <span>
                   Already have an account?{' '}
-                  <button onClick={() => setIsRegister(false)} className="text-amber-600 font-semibold hover:underline cursor-pointer">Sign In</button>
+                  <button onClick={() => { setIsRegister(false); setError(''); }} className="text-amber-600 font-semibold hover:underline cursor-pointer">Sign In</button>
                 </span>
               ) : (
                 <span>
                   Don't have an account yet?{' '}
-                  <button onClick={() => setIsRegister(true)} className="text-amber-600 font-semibold hover:underline cursor-pointer">Create Account</button>
+                  <button onClick={() => { setIsRegister(true); setError(''); }} className="text-amber-600 font-semibold hover:underline cursor-pointer">Create Account</button>
                 </span>
-              )}
+              ))}
             </div>
           </div>
         </div>

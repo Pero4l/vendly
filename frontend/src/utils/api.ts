@@ -588,20 +588,23 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
 }
 
 export function saveToken(token: string) {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('vendly_token', token);
-  }
+  if (typeof window !== 'undefined') localStorage.setItem('vendly_token', token);
 }
-
 export function removeToken() {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('vendly_token');
-  }
+  if (typeof window !== 'undefined') localStorage.removeItem('vendly_token');
 }
-
 export function getToken() {
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem('vendly_token');
-  }
+  if (typeof window !== 'undefined') return localStorage.getItem('vendly_token');
   return null;
+}
+export function saveUser(user: any) {
+  if (typeof window !== 'undefined') localStorage.setItem('vendly_user', JSON.stringify(user));
+}
+export function getUser() {
+  if (typeof window === 'undefined') return null;
+  const u = localStorage.getItem('vendly_user');
+  return u ? JSON.parse(u) : null;
+}
+export function removeUser() {
+  if (typeof window !== 'undefined') localStorage.removeItem('vendly_user');
 }

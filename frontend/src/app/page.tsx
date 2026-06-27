@@ -20,7 +20,6 @@ import {
   ArrowRightLeft
 } from 'lucide-react';
 import Link from 'next/link';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 // Interactive Escrow Simulator Stages data
 const SIMULATOR_STAGES = [
@@ -115,35 +114,13 @@ export default function Home() {
                 <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </Link>
 
-              {/* Custom Web3 Connect Wallet Button */}
-              <ConnectButton.Custom>
-                {({ account, chain, openConnectModal, mounted }) => {
-                  const ready = mounted;
-                  const connected = ready && account && chain;
-
-                  if (!connected) {
-                    return (
-                      <button
-                        onClick={openConnectModal}
-                        className="rounded-xl border border-neutral-700 hover:border-neutral-550 bg-neutral-900/50 hover:bg-neutral-900 px-7 py-4 text-sm font-bold text-neutral-300 transition-all flex items-center gap-2 cursor-pointer"
-                      >
-                        <Wallet className="h-4 w-4 text-amber-400" />
-                        Connect Wallet
-                      </button>
-                    );
-                  }
-
-                  return (
-                    <Link
-                      href="/dashboard"
-                      className="rounded-xl border border-emerald-500/30 hover:border-emerald-550 bg-emerald-500/10 hover:bg-emerald-500/15 px-7 py-4 text-sm font-bold text-emerald-400 transition-all flex items-center gap-2"
-                    >
-                      <Wallet className="h-4 w-4 text-emerald-400 animate-pulse" />
-                      View Dashboard
-                    </Link>
-                  );
-                }}
-              </ConnectButton.Custom>
+              <Link
+                href="/dashboard"
+                className="rounded-xl border border-neutral-700 hover:border-neutral-500 bg-neutral-900/50 hover:bg-neutral-900 px-7 py-4 text-sm font-bold text-neutral-300 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <ArrowUpRight className="h-4 w-4 text-amber-400" />
+                View Dashboard
+              </Link>
             </div>
 
             {/* Trusted indicators */}

@@ -17,10 +17,8 @@
  */
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-import { Web3Provider } from '../components/Web3Provider';
 import MobileTopBar from '../components/MobileTopBar';
 import BottomNav from '../components/BottomNav';
-import '@rainbow-me/rainbowkit/styles.css';
 import './globals.css';
 
 /* ── Fonts ─────────────────────────────────────────────────────── */
@@ -53,28 +51,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className="h-full antialiased bg-white text-neutral-900">
       <body className={`${geistSans.variable} ${geistMono.variable} h-full bg-white text-neutral-900 font-sans selection:bg-yellow-200`}>
-        <Web3Provider>
-          {/*
-           * MobileTopBar — sticky top bar, only visible on mobile (md:hidden inside component).
-           * Renders above the page content.
-           */}
           <MobileTopBar />
-
-          {/*
-           * app-shell — wraps all page content with bottom padding (pb-20)
-           * on mobile so content never hides behind the BottomNav.
-           * On desktop (md+) the padding is removed.
-           */}
           <div className="app-shell">
             {children}
           </div>
-
-          {/*
-           * BottomNav — fixed bottom tab bar, only visible on mobile (md:hidden inside component).
-           * Tabs: Home · Shop · Orders · Wallet · More
-           */}
           <BottomNav />
-        </Web3Provider>
       </body>
     </html>
   );

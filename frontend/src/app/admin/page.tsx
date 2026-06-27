@@ -3,45 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/Header';
 import { apiRequest } from '../../utils/api';
-import { useAccount, useWriteContract } from 'wagmi';
-import { ethers } from 'ethers';
 import { ShieldCheck, Percent, Check, AlertCircle, RefreshCw, X, Coins, ShieldAlert } from 'lucide-react';
 
-const MARKETPLACE_ABI = [
-  {
-    "inputs": [{ "internalType": "uint256", "name": "_feeBps", "type": "uint256" }],
-    "name": "setPlatformFee",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "token", "type": "address" }],
-    "name": "withdrawFees",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-];
-
-const ESCROW_ABI = [
-  {
-    "inputs": [
-      { "internalType": "bytes32", "name": "orderId", "type": "bytes32" },
-      { "internalType": "uint256", "name": "refundAmount", "type": "uint256" }
-    ],
-    "name": "resolveDispute",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-];
-
-const MARKETPLACE_ADDRESS = process.env.NEXT_PUBLIC_MARKETPLACE_ADDRESS || '0x0000000000000000000000000000000000000000';
-const ESCROW_ADDRESS = process.env.NEXT_PUBLIC_ESCROW_ADDRESS || '0x0000000000000000000000000000000000000000';
-
 export default function AdminPanel() {
-  const { writeContract } = useWriteContract();
 
   const [pendingStores, setPendingStores] = useState<any[]>([]);
   const [disputes, setDisputes] = useState<any[]>([]);
@@ -88,34 +52,12 @@ export default function AdminPanel() {
       alert('Please enter a valid refund percentage between 0 and 100.');
       return;
     }
-
     try {
-      const orderIdBytes = ethers.id(dispute.orderId);
-      const totalAmountWei = ethers.parseEther(dispute.order.totalAmount.toString());
-      const refundAmountWei = (totalAmountWei * BigInt(Math.round(refundPct))) / BigInt(100);
-
-      // On-Chain Dispute Resolution with safe Sandbox fallback
-      try {
-        writeContract({
-          address: ESCROW_ADDRESS as `0x${string}`,
-          abi: ESCROW_ABI,
-          functionName: 'resolveDispute',
-          args: [
-            orderIdBytes as `0x${string}`,
-            refundAmountWei
-          ]
-        });
-      } catch (chainErr) {
-        console.warn('Smart contract resolve call bypassed. Operating in local sandbox.');
-      }
-
-      // Sync to Backend Database
       await apiRequest(`/admin/disputes/${dispute.id}/resolve`, {
         method: 'POST',
         body: JSON.stringify({ refundPercentage: refundPct })
       });
-
-      alert(`Dispute successfully resolved! ${refundPct}% refunded to Buyer, ${100 - refundPct}% released to Seller.`);
+      alert(`Dispute resolved! ${refundPct}% refunded to Buyer, ${100 - refundPct}% released to Seller.`);
       fetchData();
     } catch (err: any) {
       alert(`Resolution error: ${err.message}`);
@@ -129,27 +71,11 @@ export default function AdminPanel() {
       alert('Fee percentage must be between 0% and 10%.');
       return;
     }
-
     try {
-      const feeBps = Math.round(pct * 100); // 2.5% -> 250 bps
-      
-      try {
-        writeContract({
-          address: MARKETPLACE_ADDRESS as `0x${string}`,
-          abi: MARKETPLACE_ABI,
-          functionName: 'setPlatformFee',
-          args: [BigInt(feeBps)]
-        });
-      } catch (chainErr) {
-        console.warn('Onchain fee update bypassed. Operating in local sandbox.');
-      }
-
-      // Sync backend
       await apiRequest('/admin/set-fee', {
         method: 'POST',
-        body: JSON.stringify({ feeBps })
+        body: JSON.stringify({ feeBps: Math.round(pct * 100) })
       });
-
       alert(`Platform fee set to ${pct}% successfully.`);
       setFeePercentage('');
     } catch (err: any) {
@@ -159,13 +85,8 @@ export default function AdminPanel() {
 
   const handleWithdrawAccumulatedFees = async () => {
     try {
-      writeContract({
-        address: MARKETPLACE_ADDRESS as `0x${string}`,
-        abi: MARKETPLACE_ABI,
-        functionName: 'withdrawFees',
-        args: [ethers.ZeroAddress as `0x${string}`] // native CELO fees
-      });
-      alert('Withdrawal request broadcasted to Celo chain.');
+      await apiRequest('/admin/withdraw-fees', { method: 'POST' });
+      alert('Fee withdrawal initiated successfully.');
     } catch (err: any) {
       alert(`Withdrawal failed: ${err.message}`);
     }

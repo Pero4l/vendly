@@ -56,8 +56,7 @@ export default function StoreManagement() {
 
   const fetchStoreOrders = async () => {
     try {
-      // In mock DB, GET /orders/my-orders returns store-relevant orders when role is SELLER
-      const res = await apiRequest('/orders/my-orders');
+      const res = await apiRequest('/orders');
       if (res.success) {
         setOrders(res.data);
       }

@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home, ShoppingBag, LayoutDashboard, Wallet, MoreHorizontal,
-  X, Settings, ShieldCheck, Store, Shield, Bell, LogOut, UserCircle, ChevronRight
+  X, ShieldCheck, Store, Shield, Bell, LogOut, UserCircle, ChevronRight
 } from 'lucide-react';
+import { getUser, removeToken, removeUser } from '../utils/api';
 
 const TABS = [
   { href: '/',            icon: Home,            label: 'Home' },
@@ -21,19 +22,12 @@ export default function BottomNav() {
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('vendly_token');
-    if (token) {
-      const dbStr = localStorage.getItem('vendly_mock_db');
-      if (dbStr) {
-        const db = JSON.parse(dbStr);
-        const user = db.users?.find((u: any) => u.email === token);
-        if (user) setCurrentUser(user);
-      }
-    }
+    setCurrentUser(getUser());
   }, [moreOpen]);
 
   const handleLogout = () => {
-    localStorage.removeItem('vendly_token');
+    removeToken();
+    removeUser();
     setCurrentUser(null);
     setMoreOpen(false);
     window.location.href = '/';
@@ -56,10 +50,10 @@ export default function BottomNav() {
           {currentUser ? (
             <div className="px-5 py-4 bg-neutral-950 flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-amber-500 flex items-center justify-center text-white font-black text-sm shrink-0">
-                {currentUser.name?.charAt(0) || 'U'}
+                {(currentUser.fullName || currentUser.username || 'U').charAt(0).toUpperCase()}
               </div>
               <div>
-                <p className="text-sm font-bold text-white">{currentUser.name}</p>
+                <p className="text-sm font-bold text-white">{currentUser.fullName || currentUser.username}</p>
                 <p className="text-[11px] text-neutral-400">{currentUser.email}</p>
               </div>
               <span className="ml-auto bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
