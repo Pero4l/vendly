@@ -25,32 +25,33 @@ export default function MobileTopBar() {
         </Link>
 
         <div className="flex items-center gap-1.5">
-          {/* Cart */}
-          <Link href="/cart" className="relative p-2 rounded-full hover:bg-neutral-100 transition-colors">
-            <ShoppingCart className="h-5 w-5 text-neutral-600" />
-            {totalItems > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 h-4 w-4 bg-amber-500 rounded-full text-[9px] font-black text-white flex items-center justify-center">
-                {totalItems > 9 ? '9+' : totalItems}
-              </span>
-            )}
-          </Link>
-
-          {/* Notifications */}
-          <Link href="/notifications" className="relative p-2 rounded-full hover:bg-neutral-100 transition-colors">
-            <Bell className="h-5 w-5 text-neutral-600" />
-            {currentUser && (
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-amber-500 rounded-full" />
-            )}
-          </Link>
-
-          {/* User avatar or Sign In */}
           {currentUser ? (
-            <Link href="/profile" className="h-8 w-8 rounded-full bg-amber-500 flex items-center justify-center text-white font-black text-sm ml-0.5">
-              {(currentUser.fullName || currentUser.username || 'U').charAt(0).toUpperCase()}
-            </Link>
+            <>
+              {/* Cart — only when logged in */}
+              <Link href="/cart" className="relative p-2 rounded-full hover:bg-neutral-100 transition-colors">
+                <ShoppingCart className="h-5 w-5 text-neutral-600" />
+                {totalItems > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 h-4 w-4 bg-amber-500 rounded-full text-[9px] font-black text-white flex items-center justify-center">
+                    {totalItems > 9 ? '9+' : totalItems}
+                  </span>
+                )}
+              </Link>
+
+              {/* Notifications — only when logged in */}
+              <Link href="/notifications" className="relative p-2 rounded-full hover:bg-neutral-100 transition-colors">
+                <Bell className="h-5 w-5 text-neutral-600" />
+                <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-amber-500 rounded-full" />
+              </Link>
+
+              {/* User avatar */}
+              <Link href="/profile" className="h-8 w-8 rounded-full bg-amber-500 flex items-center justify-center text-white font-black text-sm ml-0.5">
+                {(currentUser.fullName || currentUser.username || 'U').charAt(0).toUpperCase()}
+              </Link>
+            </>
           ) : (
+            /* Not logged in — only show Sign In button */
             <Link href="/login"
-              className="flex items-center gap-1 text-xs font-bold text-white bg-amber-500 hover:bg-amber-600 px-3 py-1.5 rounded-lg transition-colors ml-0.5">
+              className="flex items-center gap-1 text-xs font-bold text-white bg-amber-500 hover:bg-amber-600 px-3 py-1.5 rounded-lg transition-colors">
               Sign In
             </Link>
           )}

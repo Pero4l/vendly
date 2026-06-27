@@ -39,6 +39,9 @@ export default function BottomNav() {
 
   const close = () => setMoreOpen(false);
 
+  // Hide the entire bottom nav when not logged in
+  if (!currentUser) return null;
+
   return (
     <>
       {/* Overlay */}

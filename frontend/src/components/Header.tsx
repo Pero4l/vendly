@@ -18,7 +18,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { apiRequest, saveToken, removeToken, saveUser, removeUser } from '../utils/api';
-import { ShoppingBag, ShieldAlert, Store, User, LogOut, KeyRound, Search, ChevronDown, HelpCircle, Lock, Menu, Bell, ShoppingCart, X, Package, Wallet, AlertTriangle, Info } from 'lucide-react';
+import { ShoppingBag, ShieldAlert, Store, User, LogOut, KeyRound, Search, ChevronDown, HelpCircle, Lock, Menu, Bell, ShoppingCart, X, Package, Wallet, AlertTriangle, Info, Eye, EyeOff } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 
 function HeaderContent() {
@@ -36,6 +36,7 @@ function HeaderContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [registerSuccess, setRegisterSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -535,8 +536,14 @@ function HeaderContent() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Password</label>
-                  <input type="password" required placeholder="Minimum 6 characters" value={password} onChange={e => setPassword(e.target.value)}
-                    className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" />
+                  <div className="relative mt-1.5">
+                    <input type={showPassword ? 'text' : 'password'} required placeholder="Minimum 6 characters" value={password} onChange={e => setPassword(e.target.value)}
+                      className="w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2 pr-10 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" />
+                    <button type="button" onClick={() => setShowPassword(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 transition-colors">
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
                 <button type="submit" disabled={loading}
                   className="w-full rounded-lg bg-amber-500 hover:bg-amber-600 py-3 text-sm font-bold text-white transition-colors mt-6 cursor-pointer disabled:opacity-60">
