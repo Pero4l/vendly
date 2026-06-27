@@ -1,5 +1,4 @@
 const { getWorkerClass, connection } = require('../queue');
-const Worker = getWorkerClass();
 const { ethers } = require('ethers');
 const { Transaction, Wallet } = require('../../models');
 const notificationService = require('../../services/notificationService');
@@ -12,6 +11,8 @@ const provider = new ethers.JsonRpcProvider(PROVIDER_URL);
  * Initializes the background workers.
  */
 function startWorkers() {
+  const Worker = getWorkerClass();
+
   // Transaction monitor worker
   const txWorker = new Worker('tx-monitor', async (job) => {
     const { txHash, transactionId } = job.data;
@@ -67,9 +68,13 @@ function startWorkers() {
 
   txWorker.on('completed', (job) => console.log(`[Worker] Transaction job completed: ${job.id}`));
   txWorker.on('failed', (job, err) => console.error(`[Worker] Transaction job failed: ${job.id}`, err));
-  
+  txWorker.on('error', (err) => console.warn('[Worker] tx-monitor error:', err.message));
+
   walletWorker.on('completed', (job) => console.log(`[Worker] Wallet creation job completed for user: ${job.data.userId}`));
   walletWorker.on('failed', (job, err) => console.error(`[Worker] Wallet creation job failed for user: ${job.data.userId}`, err));
+  walletWorker.on('error', (err) => console.warn('[Worker] wallets error:', err.message));
+
+  notifWorker.on('error', (err) => console.warn('[Worker] notifications error:', err.message));
 }
 
 module.exports = {

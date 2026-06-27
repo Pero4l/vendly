@@ -1,11 +1,16 @@
-const authService = require('../services/authService');
-const { User, Wallet } = require('../models');
+const authService = require("../services/authService");
+const { User, Wallet } = require("../models");
 
 async function register(req, res, next) {
   try {
     const { fullName, email, password, username } = req.body;
     if (!fullName || !email || !password || !username) {
-      return res.status(400).json({ success: false, message: 'fullName, email, password, and username are required' });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "fullName, email, password, and username are required",
+        });
     }
 
     // if (password.length < 6) {
@@ -27,33 +32,40 @@ async function register(req, res, next) {
 
     // const hashedPassword = await bcrypt.hash(password, 12);
 
-    const result = await authService.registerUser({ fullName, email, password, username });
+    const result = await authService.registerUser({
+      fullName,
+      email,
+      password,
+      username,
+    });
     res.status(200).json({
       success: true,
-      message: 'Verification email sent. Please check your inbox to activate your account.',
+      message:
+        "Verification email sent. Please check your inbox to activate your account.",
       data: {
         email: result.email,
-        verificationUrl: result.verificationUrl
-      }
+        verificationUrl: result.verificationUrl,
+      },
     });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
 }
 
-
 async function verifyEmail(req, res, next) {
   try {
     const { token } = req.query;
     if (!token) {
-      return res.status(400).json({ success: false, message: 'Token is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Token is required" });
     }
 
     const data = await authService.verifyUserEmail(token);
 
-    const acceptHeader = req.headers['accept'] || '';
-    if (acceptHeader.includes('text/html')) {
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const acceptHeader = req.headers["accept"] || "";
+    if (acceptHeader.includes("text/html")) {
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
       return res.send(`
         <!DOCTYPE html>
         <html>
@@ -83,7 +95,13 @@ async function verifyEmail(req, res, next) {
       `);
     }
 
-    res.status(200).json({ success: true, message: 'Email verified and account created successfully', data });
+    res
+      .status(200)
+      .json({
+        success: true,
+        message: "Email verified and account created successfully",
+        data,
+      });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -96,11 +114,18 @@ async function login(req, res, next) {
     const { password } = req.body;
 
     if (!identifier || !password) {
-      return res.status(400).json({ success: false, message: 'Email/username/phone and password are required' });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Email/username/phone and password are required",
+        });
     }
 
     const data = await authService.loginUser({ identifier, password });
-    res.status(200).json({ success: true, message: 'Logged in successfully', data });
+    res
+      .status(200)
+      .json({ success: true, message: "Logged in successfully", data });
   } catch (error) {
     res.status(401).json({ success: false, message: error.message });
   }
@@ -110,7 +135,9 @@ async function refresh(req, res, next) {
   try {
     const { refreshToken } = req.body;
     if (!refreshToken) {
-      return res.status(400).json({ success: false, message: 'Refresh token required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Refresh token required" });
     }
 
     const data = await authService.refreshAccessToken(refreshToken);
@@ -123,12 +150,34 @@ async function refresh(req, res, next) {
 async function getProfile(req, res, next) {
   try {
     const user = await User.findByPk(req.user.id, {
-      attributes: ['id', 'fullName', 'username', 'email', 'phone', 'bio', 'profileImage', 'role', 'status', 'isVerified', 'emailVerified', 'lastLoginAt', 'createdAt'],
-      include: [{ model: Wallet, as: 'wallet', attributes: ['address', 'username', 'isActive'] }]
+      attributes: [
+        "id",
+        "fullName",
+        "username",
+        "email",
+        "phone",
+        "bio",
+        "profileImage",
+        "role",
+        "status",
+        "isVerified",
+        "emailVerified",
+        "lastLoginAt",
+        "createdAt",
+      ],
+      include: [
+        {
+          model: Wallet,
+          as: "wallet",
+          attributes: ["address", "username", "isActive"],
+        },
+      ],
     });
 
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     res.status(200).json({ success: true, data: user });
@@ -148,9 +197,11 @@ async function updateProfile(req, res, next) {
       bio,
       profileImage,
       password,
-      currentPassword
+      currentPassword,
     });
-    res.status(200).json({ success: true, message: 'Profile updated successfully', data });
+    res
+      .status(200)
+      .json({ success: true, message: "Profile updated successfully", data });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -160,7 +211,9 @@ async function forgotPassword(req, res, next) {
   try {
     const { email } = req.body;
     if (!email) {
-      return res.status(400).json({ success: false, message: 'Email is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Email is required" });
     }
 
     const result = await authService.forgotPassword(email);
@@ -174,7 +227,12 @@ async function resetPassword(req, res, next) {
   try {
     const { token, password } = req.body;
     if (!token || !password) {
-      return res.status(400).json({ success: false, message: 'Token and new password are required' });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Token and new password are required",
+        });
     }
 
     const result = await authService.resetPassword(token, password);
@@ -197,11 +255,29 @@ async function registerAdmin(req, res, next) {
   try {
     const { fullName, email, password, username, adminSecretKey } = req.body;
     if (!fullName || !email || !password || !username || !adminSecretKey) {
-      return res.status(400).json({ success: false, message: 'fullName, email, password, username, and adminSecretKey are required' });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "fullName, email, password, username, and adminSecretKey are required",
+        });
     }
 
-    const data = await authService.registerAdmin({ fullName, email, password, username, adminSecretKey });
-    res.status(201).json({ success: true, message: 'Admin account created successfully', data });
+    const data = await authService.registerAdmin({
+      fullName,
+      email,
+      password,
+      username,
+      adminSecretKey,
+    });
+    res
+      .status(201)
+      .json({
+        success: true,
+        message: "Admin account created successfully",
+        data,
+      });
   } catch (error) {
     res.status(403).json({ success: false, message: error.message });
   }
@@ -218,5 +294,5 @@ module.exports = {
   forgotPassword,
   resetPassword,
   logout,
-  registerAdmin
+  registerAdmin,
 };

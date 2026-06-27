@@ -4,10 +4,16 @@ require('dotenv').config();
 const REDIS_HOST = process.env.REDIS_HOST || '127.0.0.1';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379');
 
+const isRemoteRedis = REDIS_HOST !== '127.0.0.1' && REDIS_HOST !== 'localhost';
+
 const connection = {
   host: REDIS_HOST,
   port: REDIS_PORT,
-  maxRetriesPerRequest: null
+  password: process.env.REDIS_PASSWORD || undefined,
+  maxRetriesPerRequest: null,
+  enableOfflineQueue: false,
+  retryStrategy: (times) => (times > 2 ? null : Math.min(times * 500, 1500)),
+  ...(isRemoteRedis ? { tls: {} } : {})
 };
 
 // Fallback task handlers in case Redis is not available

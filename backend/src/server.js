@@ -7,7 +7,7 @@ const { initSocket } = require('./sockets/chatSocket');
 const { startWorkers } = require('./jobs/processors');
 const logger = require('./utils/logger');
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 const server = http.createServer(app);
 
 // Initialize Socket.io
@@ -40,7 +40,7 @@ async function start() {
     await sequelize.authenticate();
     logger.info('Database connection established.');
   } catch (error) {
-    const root = error.original || error.parent || error; 
+    const root = error.original || error.parent || error;
     const msg = root.message || error.message || String(error);
     logger.error('────────────────────────────────────────────────────────────');
     logger.error('  Could not connect to the database.');
