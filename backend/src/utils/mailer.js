@@ -165,9 +165,11 @@ async function sendVerificationEmail(email, fullName, verificationUrl) {
     <p class="greeting">Hello ${fullName}!</p>
     <p>Thanks for signing up. Tap the button below to verify your email address and activate your account. We'll automatically set up your secure Celo Web3 wallet once you're in.</p>
     <div class="cta">
-      <a href="${verificationUrl}" class="btn">Verify Email Address</a>
+      <a href="${verificationUrl}" class="btn" target="_blank" rel="noopener noreferrer">Verify Email Address</a>
     </div>
     <hr class="divider">
+    <p class="fine">If the button above doesn't work, copy and paste this link into your browser:</p>
+    <p style="word-break:break-all;font-size:12px;color:#78716c;margin:8px 0 16px"><a href="${verificationUrl}" style="color:#b45309" target="_blank" rel="noopener noreferrer">${verificationUrl}</a></p>
     <p class="fine">This link expires in <strong>24 hours</strong>. If you didn't create a Vendly account, you can safely ignore this email.</p>
     `
   );
