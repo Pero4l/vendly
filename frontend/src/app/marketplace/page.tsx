@@ -3,9 +3,10 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Header from '../../components/Header';
 import { apiRequest } from '../../utils/api';
-import { ShoppingBag, Search, Sparkles, Filter, ShieldCheck, ArrowRight, Star, RefreshCw, AlertCircle } from 'lucide-react';
+import { ShoppingBag, Search, Sparkles, Filter, ShieldCheck, ArrowRight, Star, RefreshCw, AlertCircle, ShoppingCart, Heart } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useCart } from '../../context/CartContext';
 
 function MarketplaceContent() {
   const searchParams = useSearchParams();
@@ -19,6 +20,9 @@ function MarketplaceContent() {
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [seedLoading, setSeedLoading] = useState(false);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [addedToCart, setAddedToCart] = useState<string | null>(null);
+  const { addItem } = useCart();
 
   // Read URL search params for instant header-homepage sync
   useEffect(() => {
@@ -68,6 +72,26 @@ function MarketplaceContent() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('vendly_favorites') || '[]');
+      setFavorites(saved);
+    } catch {}
+  }, []);
+
+  const toggleFavorite = (id: string) => {
+    const next = favorites.includes(id) ? favorites.filter(f => f !== id) : [...favorites, id];
+    setFavorites(next);
+    localStorage.setItem('vendly_favorites', JSON.stringify(next));
+  };
+
+  const handleAddToCart = (product: any) => {
+    const img = product.images?.[0]?.imageUrl || product.images?.[0] || '';
+    addItem({ id: product.id, title: product.title, price: String(product.price), image: img, storeId: product.storeId || '', storeName: product.store?.name || 'Vendly Store' });
+    setAddedToCart(product.id);
+    setTimeout(() => setAddedToCart(null), 2000);
   };
 
   // Re-run search/fetch when categories, keyword, rating limits change
@@ -451,14 +475,18 @@ function MarketplaceContent() {
                   >
                     {/* Top image wrapper */}
                     <div className="relative h-48 bg-neutral-100 overflow-hidden">
-                      <img 
-                        src={img} 
-                        alt={product.title} 
+                      <img
+                        src={img}
+                        alt={product.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                       <span className="absolute top-3 right-3 rounded-full bg-neutral-900/90 px-3 py-1 text-xs font-black text-amber-400 tracking-wider">
                         {product.price} CELO
                       </span>
+                      <button onClick={(e) => { e.preventDefault(); toggleFavorite(product.id); }}
+                        className="absolute top-3 left-3 h-7 w-7 rounded-full bg-white/90 flex items-center justify-center shadow-sm transition-colors hover:bg-white">
+                        <Heart className={`h-3.5 w-3.5 ${favorites.includes(product.id) ? 'text-rose-500 fill-rose-500' : 'text-neutral-400'}`} />
+                      </button>
                     </div>
 
                     {/* Content details */}
@@ -499,18 +527,26 @@ function MarketplaceContent() {
                       </div>
 
                       {/* Bottom action block */}
-                      <div className="flex items-center justify-between gap-4 pt-3 border-t border-neutral-100">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-neutral-400 font-medium">Est. Price</span>
-                          <span className="text-xs font-black text-neutral-700">${usdEstimate} USD</span>
+                      <div className="space-y-2 pt-3 border-t border-neutral-100">
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-neutral-400 font-medium">Est. Price</span>
+                            <span className="text-xs font-black text-neutral-700">${usdEstimate} USD</span>
+                          </div>
+                          <Link
+                            href={`/products/${product.id}`}
+                            className="rounded-lg bg-amber-500 hover:bg-amber-600 px-3.5 py-2 text-xs font-bold text-white transition-colors cursor-pointer"
+                          >
+                            View Deal
+                          </Link>
                         </div>
-
-                        <Link 
-                          href={`/products/${product.id}`}
-                          className="rounded-lg bg-amber-500 hover:bg-amber-600 px-3.5 py-2 text-xs font-bold text-white transition-colors cursor-pointer"
+                        <button
+                          onClick={() => handleAddToCart(product)}
+                          className={`w-full flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-bold transition-colors cursor-pointer ${addedToCart === product.id ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700'}`}
                         >
-                          View Deal
-                        </Link>
+                          <ShoppingCart className="h-3.5 w-3.5" />
+                          {addedToCart === product.id ? 'Added to Cart!' : 'Add to Cart'}
+                        </button>
                       </div>
 
                     </div>

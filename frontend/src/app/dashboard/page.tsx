@@ -55,8 +55,6 @@ export default function Dashboard() {
       console.error(err);
     }
   };
-    }
-  };
 
   const fetchNotifications = async () => {
     try {

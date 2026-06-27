@@ -4,8 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Header from '../../../components/Header';
 import { apiRequest } from '../../../utils/api';
-import { ShoppingCart, ShieldCheck, RefreshCw, Star, ArrowLeft, Truck, Package, ShieldAlert, Award, ChevronRight, HelpCircle } from 'lucide-react';
+import { ShoppingCart, ShieldCheck, RefreshCw, Star, ArrowLeft, Truck, Package, ShieldAlert, Award, ChevronRight, HelpCircle, Heart } from 'lucide-react';
 import Link from 'next/link';
+import { useCart } from '../../../context/CartContext';
 
 export default function ProductDetails() {
   const { id } = useParams();
@@ -18,6 +19,9 @@ export default function ProductDetails() {
   const [statusMessage, setStatusMessage] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [showEscrowDetails, setShowEscrowDetails] = useState(true);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [cartAdded, setCartAdded] = useState(false);
+  const { addItem } = useCart();
 
   const fetchProduct = async () => {
     try {
@@ -34,7 +38,34 @@ export default function ProductDetails() {
 
   useEffect(() => {
     fetchProduct();
+    try {
+      const favs = JSON.parse(localStorage.getItem('vendly_favorites') || '[]');
+      setIsFavorite(favs.includes(String(id)));
+    } catch {}
   }, [id]);
+
+  const toggleFavorite = () => {
+    try {
+      const favs: string[] = JSON.parse(localStorage.getItem('vendly_favorites') || '[]');
+      const next = isFavorite ? favs.filter(f => f !== String(id)) : [...favs, String(id)];
+      localStorage.setItem('vendly_favorites', JSON.stringify(next));
+      setIsFavorite(!isFavorite);
+    } catch {}
+  };
+
+  const handleAddToCart = () => {
+    if (!product) return;
+    addItem({
+      id: product.id,
+      title: product.title,
+      price: String(product.price),
+      image: product.images?.[0] || '',
+      storeId: product.storeId || '',
+      storeName: product.store?.name || 'Vendly Store'
+    });
+    setCartAdded(true);
+    setTimeout(() => setCartAdded(false), 2000);
+  };
 
   const handlePurchase = async () => {
     setPurchaseLoading(true);
@@ -333,7 +364,7 @@ export default function ProductDetails() {
               )}
 
 
-              {/* Main Action */}
+              {/* Main Actions */}
               <div className="space-y-2">
                 <button
                   onClick={handlePurchase}
@@ -343,6 +374,24 @@ export default function ProductDetails() {
                   <ShoppingCart className="h-4 w-4" />
                   {purchaseLoading ? statusMessage || 'Processing...' : product.quantity === 0 ? 'Out of Stock' : 'Buy Now — Escrow Protected'}
                 </button>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAddToCart}
+                    disabled={product.quantity === 0}
+                    className={`flex-1 flex items-center justify-center gap-2 rounded-lg border py-2.5 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 ${cartAdded ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700'}`}
+                  >
+                    <ShoppingCart className="h-3.5 w-3.5" />
+                    {cartAdded ? 'Added!' : 'Add to Cart'}
+                  </button>
+                  <button
+                    onClick={toggleFavorite}
+                    className={`h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border transition-colors cursor-pointer ${isFavorite ? 'border-rose-300 bg-rose-50 text-rose-500' : 'border-neutral-300 bg-white text-neutral-400 hover:text-rose-400'}`}
+                    title={isFavorite ? 'Remove from favorites' : 'Save to favorites'}
+                  >
+                    <Heart className="h-4 w-4" fill={isFavorite ? 'currentColor' : 'none'} />
+                  </button>
+                </div>
               </div>
 
               {/* Escrow payout toggle box */}

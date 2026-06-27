@@ -18,7 +18,8 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { apiRequest, saveToken, removeToken, saveUser, removeUser } from '../utils/api';
-import { ShoppingBag, ShieldAlert, Store, User, LogOut, KeyRound, Search, ChevronDown, HelpCircle, Lock, Menu, Bell } from 'lucide-react';
+import { ShoppingBag, ShieldAlert, Store, User, LogOut, KeyRound, Search, ChevronDown, HelpCircle, Lock, Menu, Bell, ShoppingCart, X, Package, Wallet, AlertTriangle, Info } from 'lucide-react';
+import { useCart } from '../context/CartContext';
 
 function HeaderContent() {
   const pathname = usePathname();
@@ -36,6 +37,11 @@ function HeaderContent() {
   const [error, setError] = useState('');
   const [registerSuccess, setRegisterSuccess] = useState(false);
 
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const { totalItems } = useCart();
+
   // Search States inside Header
   const [headerSearch, setHeaderSearch] = useState('');
   const [headerCategory, setHeaderCategory] = useState('');
@@ -46,6 +52,24 @@ function HeaderContent() {
     { id: '3', name: 'Apparel' },
     { id: '4', name: 'Home & Kitchen' }
   ];
+
+  const MOCK_NOTIFS = [
+    { id: '1', type: 'order', title: 'Order Placed', message: 'Your order is awaiting seller confirmation.', createdAt: new Date(Date.now()-300000).toISOString(), read: false },
+    { id: '2', type: 'escrow', title: 'Escrow Milestone', message: 'Milestone 1 (30%) released to seller.', createdAt: new Date(Date.now()-3600000).toISOString(), read: true },
+    { id: '3', type: 'wallet', title: 'Wallet Ready', message: 'Your custodial wallet has been created.', createdAt: new Date(Date.now()-86400000).toISOString(), read: true },
+  ];
+
+  const openNotifDropdown = async () => {
+    setShowNotifDropdown(v => !v);
+    if (!notifications.length) {
+      setNotifLoading(true);
+      try {
+        const res = await apiRequest('/notifications');
+        setNotifications(res.success && res.data?.length ? res.data.slice(0, 5) : MOCK_NOTIFS);
+      } catch { setNotifications(MOCK_NOTIFS); }
+      finally { setNotifLoading(false); }
+    }
+  };
 
   const loadProfile = async () => {
     try {
@@ -308,22 +332,70 @@ function HeaderContent() {
 
                 <div className="h-8 w-px bg-neutral-200" />
 
-                {/* Direct Dashboard Link icon */}
-                <Link
-                  href="/dashboard"
-                  className="p-2 hover:bg-neutral-100 rounded-full text-neutral-500 hover:text-amber-500 transition-colors relative"
-                  title="Notifications & Purchases"
-                >
-                  <Bell className="h-4.5 w-4.5" />
-                  <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-amber-500 rounded-full" />
+                {/* Cart */}
+                <Link href="/cart" className="relative p-2 hover:bg-neutral-100 rounded-full text-neutral-500 hover:text-amber-500 transition-colors" title="Cart">
+                  <ShoppingCart className="h-4 w-4" />
+                  {totalItems > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 h-4 w-4 bg-amber-500 rounded-full text-[9px] font-black text-white flex items-center justify-center">
+                      {totalItems > 9 ? '9+' : totalItems}
+                    </span>
+                  )}
                 </Link>
+
+                {/* Notification bell + dropdown */}
+                <div className="relative">
+                  <button onClick={openNotifDropdown}
+                    className="p-2 hover:bg-neutral-100 rounded-full text-neutral-500 hover:text-amber-500 transition-colors relative"
+                    title="Notifications">
+                    <Bell className="h-4 w-4" />
+                    <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-amber-500 rounded-full" />
+                  </button>
+
+                  {showNotifDropdown && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowNotifDropdown(false)} />
+                      <div className="absolute right-0 top-10 z-50 w-80 bg-white rounded-2xl border border-neutral-200 shadow-2xl overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
+                          <span className="text-sm font-bold text-neutral-900">Notifications</span>
+                          <button onClick={() => setShowNotifDropdown(false)} className="p-1 rounded-full hover:bg-neutral-100">
+                            <X className="h-3.5 w-3.5 text-neutral-400" />
+                          </button>
+                        </div>
+                        <div className="divide-y divide-neutral-50 max-h-72 overflow-y-auto">
+                          {notifLoading ? (
+                            <div className="p-6 text-center text-xs text-neutral-400">Loading...</div>
+                          ) : notifications.length === 0 ? (
+                            <div className="p-6 text-center text-xs text-neutral-400">No notifications yet</div>
+                          ) : notifications.map(n => (
+                            <div key={n.id} className={`px-4 py-3 flex gap-3 ${!n.read ? 'bg-amber-50' : ''}`}>
+                              <div className={`h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0 ${n.type === 'order' ? 'bg-blue-100 text-blue-600' : n.type === 'escrow' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                                {n.type === 'order' ? <Package className="h-3.5 w-3.5" /> : n.type === 'wallet' ? <Wallet className="h-3.5 w-3.5" /> : <Info className="h-3.5 w-3.5" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-neutral-800">{n.title}</p>
+                                <p className="text-[11px] text-neutral-500 truncate">{n.message}</p>
+                              </div>
+                              {!n.read && <div className="h-2 w-2 rounded-full bg-amber-500 flex-shrink-0 mt-1" />}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="px-4 py-2 border-t border-neutral-100">
+                          <Link href="/notifications" onClick={() => setShowNotifDropdown(false)}
+                            className="text-xs font-bold text-amber-600 hover:underline">
+                            View all notifications →
+                          </Link>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
 
                 <button
                   onClick={handleLogout}
                   className="p-2 hover:bg-neutral-100 rounded-full text-neutral-500 hover:text-neutral-900 transition-colors"
                   title="Logout Account"
                 >
-                  <LogOut className="h-4.5 w-4.5" />
+                  <LogOut className="h-4 w-4" />
                 </button>
               </div>
             ) : (
