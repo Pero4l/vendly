@@ -1,9 +1,11 @@
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
 const { User, Wallet, sequelize } = require('../models');
 const { JWT_SECRET } = require('../middlewares/auth');
 const { addWalletCreationJob } = require('../jobs/queue');
+const redis = require('../config/redis');
 const {
   sendVerificationEmail,
   sendWelcomeEmail,
@@ -41,29 +43,26 @@ async function registerUser({ fullName, email, password, username }) {
 
   const passwordHash = await bcrypt.hash(password, 10);
 
-  const token = jwt.sign(
-    { fullName: trimmedFullName, email: trimmedEmail, passwordHash, username: trimmedUsername },
-    JWT_SECRET,
-    { expiresIn: '1d' }
+  const shortToken = crypto.randomBytes(32).toString('hex');
+  await redis.setex(
+    `verify:${shortToken}`,
+    86400,
+    JSON.stringify({ fullName: trimmedFullName, email: trimmedEmail, passwordHash, username: trimmedUsername })
   );
 
-  const verificationUrl = `${FRONTEND_URL}/verify-email?token=${token}`;
+  const verificationUrl = `${FRONTEND_URL}/verify-email?token=${shortToken}`;
   await sendVerificationEmail(trimmedEmail, trimmedFullName, verificationUrl);
 
-  return { email: trimmedEmail, verificationUrl };
+  return { email: trimmedEmail };
 }
 
 async function verifyUserEmail(token) {
   if (!token) throw new Error('Verification token is required');
 
-  let decoded;
-  try {
-    decoded = jwt.verify(token, JWT_SECRET);
-  } catch {
-    throw new Error('Invalid or expired verification token');
-  }
+  const raw = await redis.get(`verify:${token}`);
+  if (!raw) throw new Error('Invalid or expired verification link. Please register again.');
 
-  const { fullName, email, passwordHash, username } = decoded;
+  const { fullName, email, passwordHash, username } = JSON.parse(raw);
 
   const [emailExists, usernameExists] = await Promise.all([
     User.findOne({ where: { email } }),
@@ -95,6 +94,8 @@ async function verifyUserEmail(token) {
     await transaction.rollback();
     throw error;
   }
+
+  await redis.del(`verify:${token}`);
 
   // Background wallet creation with username
   try {

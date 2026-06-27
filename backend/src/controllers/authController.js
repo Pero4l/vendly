@@ -42,10 +42,7 @@ async function register(req, res, next) {
       success: true,
       message:
         "Verification email sent. Please check your inbox to activate your account.",
-      data: {
-        email: result.email,
-        verificationUrl: result.verificationUrl,
-      },
+      data: { email: result.email },
     });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
