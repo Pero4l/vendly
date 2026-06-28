@@ -321,7 +321,7 @@ export default function StorePage() {
               Unfortunately, your store <span className="font-bold text-neutral-800">"{store.name}"</span> was not approved.
               Please contact support if you believe this is a mistake.
             </p>
-            <Link href="/contact" className="inline-flex items-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-700 px-6 py-3 text-sm font-bold text-white transition-colors">
+            <Link href="/support" className="inline-flex items-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-700 px-6 py-3 text-sm font-bold text-white transition-colors">
               Contact Support
             </Link>
           </div>

@@ -8,18 +8,62 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCart } from '../../context/CartContext';
 
-const CAT_IMAGES: Record<string, string> = {
-  'Electronics':         'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=400',
-  'Digital Services':   'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=400',
-  'Apparel & Fashion':  'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&q=80&w=400',
-  'Home & Kitchen':     'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=400',
-  'Health & Beauty':    'https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&q=80&w=400',
-  'Sports & Outdoors':  'https://images.unsplash.com/photo-1547347298-4074fc3086f0?auto=format&fit=crop&q=80&w=400',
-  'Books & Media':      'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&q=80&w=400',
-  'Art & Collectibles': 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&q=80&w=400',
+const ELECTRONICS_IMG   = 'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?auto=format&fit=crop&q=80&w=400';
+const DIGITAL_IMG       = 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=400';
+const FASHION_IMG       = 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=400';
+const HOME_IMG          = 'https://images.unsplash.com/photo-1556909172-54557c7e4fb7?auto=format&fit=crop&q=80&w=400';
+const HEALTH_IMG        = 'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?auto=format&fit=crop&q=80&w=400';
+const SPORTS_IMG        = 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&q=80&w=400';
+const BOOKS_IMG         = 'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=400';
+const ART_IMG           = 'https://images.unsplash.com/photo-1561214115-f2f134cc4912?auto=format&fit=crop&q=80&w=400';
+const PHONES_IMG        = 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&q=80&w=400';
+const LAPTOPS_IMG       = 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&q=80&w=400';
+const FURNITURE_IMG     = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&q=80&w=400';
+const KITCHEN_IMG       = 'https://images.unsplash.com/photo-1556909172-54557c7e4fb7?auto=format&fit=crop&q=80&w=400';
+const FALLBACK_IMG      = 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&q=80&w=400';
+
+// Keyword → image. Checked in order; first match wins.
+const CAT_KEYWORD_MAP: Array<[string, string]> = [
+  ['phone',       PHONES_IMG],
+  ['tablet',      PHONES_IMG],
+  ['laptop',      LAPTOPS_IMG],
+  ['computer',    LAPTOPS_IMG],
+  ['electronic',  ELECTRONICS_IMG],
+  ['tech',        ELECTRONICS_IMG],
+  ['gadget',      ELECTRONICS_IMG],
+  ['digital',     DIGITAL_IMG],
+  ['software',    DIGITAL_IMG],
+  ['service',     DIGITAL_IMG],
+  ['fashion',     FASHION_IMG],
+  ['apparel',     FASHION_IMG],
+  ['cloth',       FASHION_IMG],
+  ['wear',        FASHION_IMG],
+  ['men',         FASHION_IMG],
+  ['women',       FASHION_IMG],
+  ['kitchen',     KITCHEN_IMG],
+  ['furniture',   FURNITURE_IMG],
+  ['home',        HOME_IMG],
+  ['living',      HOME_IMG],
+  ['health',      HEALTH_IMG],
+  ['beauty',      HEALTH_IMG],
+  ['cosmetic',    HEALTH_IMG],
+  ['wellness',    HEALTH_IMG],
+  ['sport',       SPORTS_IMG],
+  ['outdoor',     SPORTS_IMG],
+  ['fitness',     SPORTS_IMG],
+  ['book',        BOOKS_IMG],
+  ['media',       BOOKS_IMG],
+  ['music',       BOOKS_IMG],
+  ['art',         ART_IMG],
+  ['collect',     ART_IMG],
+  ['craft',       ART_IMG],
+];
+
+const getCatImage = (name: string): string => {
+  const lower = name.toLowerCase();
+  const hit = CAT_KEYWORD_MAP.find(([kw]) => lower.includes(kw));
+  return hit ? hit[1] : FALLBACK_IMG;
 };
-const getCatImage = (name: string) =>
-  CAT_IMAGES[name] || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&q=80&w=400';
 
 function MarketplaceContent() {
   const searchParams = useSearchParams();
@@ -163,29 +207,58 @@ function MarketplaceContent() {
         </div>
       </section>
 
-      {/* 2. Amazon-style Department Grid (4-box Cards) */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 w-full">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {categories.map((cat: any) => (
-            <div 
-              key={cat.id} 
-              className="bg-neutral-50 border border-neutral-200 rounded-xl p-5 flex flex-col justify-between hover:shadow-md transition-shadow"
-            >
-              <div className="space-y-2">
-                <h3 className="font-bold text-neutral-900 text-base">{cat.name}</h3>
-                <div className="h-32 rounded-lg overflow-hidden relative">
-                  <img src={getCatImage(cat.name)} alt={cat.name} className="w-full h-full object-cover" />
-                </div>
-              </div>
-              <button
-                onClick={() => setCategory(cat.id)}
-                className="mt-4 text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 hover:underline cursor-pointer"
-              >
-                Shop Now <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
+      {/* 2. Department Grid */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-5 pb-2 w-full">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-black text-neutral-500 uppercase tracking-widest">Departments</p>
+          {category && (
+            <button onClick={() => setCategory('')} className="text-[10px] font-bold text-amber-600 hover:text-amber-700 cursor-pointer">
+              Clear ✕
+            </button>
+          )}
         </div>
+
+        {categories.length === 0 ? (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-16 w-20 flex-shrink-0 rounded-xl bg-neutral-100 animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-8 gap-2">
+            {categories.map((cat: any) => {
+              const active = category === cat.id;
+              const imgSrc = cat.image?.url || getCatImage(cat.name);
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setCategory(active ? '' : cat.id)}
+                  className={`group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-200 focus:outline-none
+                    ${active ? 'ring-2 ring-amber-500 shadow-md' : 'hover:shadow-md hover:-translate-y-0.5'}`}
+                >
+                  <div className="h-30 sm:h-16 relative">
+                    <img
+                      src={imgSrc}
+                      alt={cat.name}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-neutral-950/80 via-neutral-950/10 to-transparent" />
+                    {active && (
+                      <div className="absolute top-1 right-1 h-3 w-3 rounded-full bg-amber-500 flex items-center justify-center">
+                        <svg className="h-2 w-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 px-1.5 pb-1">
+                      <p className="text-white font-black text-[10px] leading-tight truncate drop-shadow-sm">{cat.name}</p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* 3. Main Browser Catalog container */}

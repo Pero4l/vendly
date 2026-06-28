@@ -36,12 +36,6 @@ function timeAgo(dateStr: string) {
   return `${days}d ago`;
 }
 
-const MOCK_NOTIFICATIONS = [
-  { id: '1', type: 'order', title: 'Order Placed', message: 'Your order has been placed and is awaiting seller confirmation.', createdAt: new Date(Date.now() - 300000).toISOString(), read: false },
-  { id: '2', type: 'escrow', title: 'Escrow Funded', message: 'Milestone 1 (30%) has been released to the seller.', createdAt: new Date(Date.now() - 3600000).toISOString(), read: true },
-  { id: '3', type: 'wallet', title: 'Wallet Created', message: 'Your custodial wallet is ready. Fund it to start trading.', createdAt: new Date(Date.now() - 86400000).toISOString(), read: true },
-];
-
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,18 +44,12 @@ export default function NotificationsPage() {
   useEffect(() => {
     apiRequest('/notifications')
       .then(res => {
-        if (res.success && res.data?.length) {
+        if (res.success && Array.isArray(res.data)) {
           setNotifications(res.data);
           setUnreadCount(res.data.filter((n: any) => !n.read).length);
-        } else {
-          setNotifications(MOCK_NOTIFICATIONS);
-          setUnreadCount(MOCK_NOTIFICATIONS.filter(n => !n.read).length);
         }
       })
-      .catch(() => {
-        setNotifications(MOCK_NOTIFICATIONS);
-        setUnreadCount(MOCK_NOTIFICATIONS.filter(n => !n.read).length);
-      })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 

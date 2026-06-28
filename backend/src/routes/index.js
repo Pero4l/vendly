@@ -11,6 +11,7 @@ const adminRoutes = require('./adminRoutes');
 const notificationRoutes = require('./notificationRoutes');
 const uploadRoutes = require('./uploadRoutes');
 const categoryRoutes = require('./categoryRoutes');
+const supportRoutes = require('./supportRoutes');
 
 router.use('/auth', authRoutes);
 router.use('/wallets', walletRoutes);
@@ -22,5 +23,6 @@ router.use('/admin', adminRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/uploads', uploadRoutes);
 router.use('/categories', categoryRoutes);
+router.use('/support', supportRoutes);
 
 module.exports = router;

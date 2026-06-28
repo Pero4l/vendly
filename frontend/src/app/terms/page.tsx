@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 
 const LAST_UPDATED = 'June 28, 2026';
@@ -24,13 +25,14 @@ function Section({ num, title, children }: SectionProps) {
 }
 
 export default function TermsPage() {
+  const router = useRouter();
   return (
     <div className="min-h-screen bg-stone-50">
       {/* Sticky top bar */}
       <div className="sticky top-0 z-40 bg-white border-b border-neutral-100 px-4 py-3.5 flex items-center gap-3">
-        <Link href="/login" className="flex items-center gap-1.5 text-sm font-bold text-neutral-500 hover:text-neutral-900 transition-colors">
+        <button onClick={() => router.back()} className="flex items-center gap-1.5 text-sm font-bold text-neutral-500 hover:text-neutral-900 transition-colors">
           <ArrowLeft className="h-4 w-4" /> Back
-        </Link>
+        </button>
         <div className="flex-1 text-center">
           <span className="text-sm font-black text-neutral-900">Terms & Conditions</span>
         </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Header from '../../components/Header';
@@ -8,27 +8,25 @@ import { useCart } from '../../context/CartContext';
 import { getUser } from '../../utils/api';
 import {
   ShoppingCart, Trash2, Plus, Minus, ShieldCheck, ArrowRight,
-  ShoppingBag, MapPin, AlertTriangle, CheckCircle
+  ShoppingBag, MapPin, CheckCircle
 } from 'lucide-react';
 
 export default function CartPage() {
   const { items, removeItem, updateQty, totalItems, totalPrice, clearCart } = useCart();
   const router = useRouter();
-  const [checkoutClicked, setCheckoutClicked] = useState(false);
 
   const handleCheckout = () => {
-    setCheckoutClicked(true);
     const user = getUser();
-    const addr = user?.address;
-    if (addr?.line1 && addr?.city && addr?.country) {
-      router.push('/checkout');
+    if (!user) {
+      router.push('/login?returnTo=/checkout');
+      return;
     }
+    router.push('/checkout');
   };
 
   const user = typeof window !== 'undefined' ? getUser() : null;
   const addr = user?.address;
   const hasAddress = !!(addr?.line1 && addr?.city && addr?.country);
-  const showAddressWarning = checkoutClicked && !hasAddress;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -146,16 +144,12 @@ export default function CartPage() {
                 </Link>
               </div>
             ) : (
-              <div className={`flex items-start gap-3 rounded-xl p-3.5 border ${showAddressWarning ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'}`}>
-                {showAddressWarning
-                  ? <AlertTriangle className="h-4 w-4 text-rose-500 flex-shrink-0 mt-0.5" />
-                  : <MapPin className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />}
+              <div className="flex items-start gap-3 rounded-xl p-3.5 border bg-amber-50 border-amber-200">
+                <MapPin className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p className={`text-xs font-bold ${showAddressWarning ? 'text-rose-700' : 'text-amber-800'}`}>
-                    {showAddressWarning ? 'Delivery address required' : 'No delivery address saved'}
-                  </p>
-                  <p className={`text-xs mt-0.5 ${showAddressWarning ? 'text-rose-600' : 'text-amber-700'}`}>
-                    Add a delivery address in your profile before checking out.{' '}
+                  <p className="text-xs font-bold text-amber-800">No delivery address saved</p>
+                  <p className="text-xs mt-0.5 text-amber-700">
+                    You can add a delivery address during checkout or in your profile.{' '}
                     <Link href="/profile" className="font-bold underline">Go to Profile →</Link>
                   </p>
                 </div>

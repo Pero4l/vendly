@@ -50,7 +50,7 @@ function VerifyEmailContent() {
 
         {status !== 'loading' && (
           <a
-            href="/dashboard"
+            href={status === 'success' ? '/dashboard' : '/'}
             className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
           >
             {status === 'success' ? 'Go to Dashboard' : 'Back to Home'}

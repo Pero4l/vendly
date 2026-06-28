@@ -18,23 +18,40 @@ const ERC20_ABI = [
 ];
 
 const ESCROW_ABI = [
-  'function releaseThirtyPercent(bytes32 orderId) external',
-  'function releaseTwentyPercent(bytes32 orderId) external',
-  'function releaseFinalFiftyPercent(bytes32 orderId) external',
-  'function refundBuyer(bytes32 orderId, uint256 refundAmount) external',
-  'function resolveDispute(bytes32 orderId, uint256 refundAmount) external',
-  'function openDispute(bytes32 orderId) external'
+  // Admin: lock funds when buyer places order
+  'function lockFunds(bytes32 orderId, address buyer, address seller, address token, uint256 amount) external payable',
+  // Admin: approve each stage — credits seller's claimable balance, does NOT auto-transfer
+  'function approveStage(bytes32 orderId, uint8 stage) external',
+  // Seller: pull any approved-but-unwithdrawN balance for their order
+  'function sellerWithdraw(bytes32 orderId) external',
+  // Admin: refund remaining locked funds to buyer (approved amounts stay credited to seller)
+  'function refundBuyer(bytes32 orderId) external',
+  // Buyer/Seller/Admin: flag an order as disputed
+  'function openDispute(bytes32 orderId) external',
+  // Admin: resolve dispute — split remaining locked funds
+  'function resolveDispute(bytes32 orderId, uint256 sellerShare) external',
+  // Admin only: emergency drain
+  'function adminEmergencyWithdraw(address token, uint256 amount) external',
+  // Views
+  'function getSellerClaimable(bytes32 orderId) external view returns (uint256)',
+  'function getOrder(bytes32 orderId) external view returns (address buyer, address seller, address token, uint256 totalAmount, uint256 approvedAmount, uint256 withdrawnAmount, uint8 stageApproved, bool active, bool disputed, bool refunded)',
+  'function admin() external view returns (address)'
 ];
 
 const PROVIDER_URL = process.env.CELO_PROVIDER_URL || 'https://alfajores-forno.celo-testnet.org';
-const provider = new ethers.JsonRpcProvider(PROVIDER_URL);
-
 const ESCROW_CONTRACT_ADDRESS = process.env.ESCROW_CONTRACT_ADDRESS || ethers.ZeroAddress;
 
-// Admin wallet is created lazily — only when an escrow function is actually called.
-// This prevents crashing on startup when ADMIN_PRIVATE_KEY is not yet set.
+// All blockchain objects are lazy — created on first use, not at module load.
+// Passing a static network avoids ethers auto-detecting chainId on startup (which spams logs if the RPC is unreachable).
+let _provider = null;
 let _adminWallet = null;
 let _escrowContract = null;
+
+function getProvider() {
+  if (_provider) return _provider;
+  _provider = new ethers.JsonRpcProvider(PROVIDER_URL, { chainId: 44787, name: 'celo-alfajores' });
+  return _provider;
+}
 
 function getAdminWallet() {
   if (_adminWallet) return _adminWallet;
@@ -49,7 +66,7 @@ function getAdminWallet() {
     );
   }
 
-  _adminWallet = new ethers.Wallet(key, provider);
+  _adminWallet = new ethers.Wallet(key, getProvider());
   return _adminWallet;
 }
 
@@ -75,7 +92,7 @@ function generateWallet() {
  */
 async function getBalances(address) {
   try {
-    const celoBalanceRaw = await provider.getBalance(address);
+    const celoBalanceRaw = await getProvider().getBalance(address);
     const celoBalance = ethers.formatEther(celoBalanceRaw);
 
     const balances = {
@@ -88,7 +105,7 @@ async function getBalances(address) {
     for (const [symbol, tokenAddress] of Object.entries(TOKENS)) {
       if (symbol === 'CELO') continue;
       try {
-        const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+        const contract = new ethers.Contract(tokenAddress, ERC20_ABI, getProvider());
         const bal = await contract.balanceOf(address);
         balances[symbol] = ethers.formatEther(bal); // Assuming 18 decimals for test tokens
       } catch (err) {
@@ -107,7 +124,7 @@ async function getBalances(address) {
  * Transfers tokens from an internal wallet to an address.
  */
 async function transferTokens(senderPrivateKey, receiverAddress, tokenSymbol, amount) {
-  const wallet = new ethers.Wallet(senderPrivateKey, provider);
+  const wallet = new ethers.Wallet(senderPrivateKey, getProvider());
   const amountWei = ethers.parseEther(amount.toString());
 
   if (tokenSymbol === 'CELO') {
@@ -128,67 +145,104 @@ async function transferTokens(senderPrivateKey, receiverAddress, tokenSymbol, am
   }
 }
 
-/**
- * Performs admin-signed Escrow milestone release triggers.
- */
-async function triggerEscrowRelease(orderId, stage) {
-  if (ESCROW_CONTRACT_ADDRESS === ethers.ZeroAddress) {
-    console.warn('[Escrow] Contract address not configured — skipping blockchain call');
-    return '0x_mock_tx_hash_for_development';
-  }
+const MOCK_TX = '0x_mock_tx_not_deployed';
 
-  const contract = getEscrowContract();
-  const orderIdBytes = ethers.id(orderId);
-  let tx;
-
-  if (stage === 1) {
-    tx = await contract.releaseThirtyPercent(orderIdBytes);
-  } else if (stage === 2) {
-    tx = await contract.releaseTwentyPercent(orderIdBytes);
-  } else if (stage === 3) {
-    tx = await contract.releaseFinalFiftyPercent(orderIdBytes);
-  } else {
-    throw new Error('Invalid release stage');
-  }
-
-  const receipt = await tx.wait();
-  return receipt.hash;
+function isEscrowDeployed() {
+  return ESCROW_CONTRACT_ADDRESS !== ethers.ZeroAddress;
 }
 
 /**
- * Performs admin-signed Escrow refund to buyer.
+ * Called by backend when buyer places an order.
+ * Locks the buyer's funds in the escrow contract.
+ * tokenSymbol: 'CELO' | 'cUSD' | 'USDT' | 'USDC'
  */
-async function triggerEscrowRefund(orderId, amount) {
-  if (ESCROW_CONTRACT_ADDRESS === ethers.ZeroAddress) {
-    console.warn('[Escrow] Contract address not configured — skipping blockchain call');
-    return '0x_mock_tx_hash_for_development';
+async function lockEscrowFunds(orderId, buyerAddress, sellerAddress, tokenSymbol, amount) {
+  if (!isEscrowDeployed()) {
+    console.warn('[Escrow] Contract not deployed — skipping lockFunds');
+    return MOCK_TX;
   }
 
   const contract = getEscrowContract();
   const orderIdBytes = ethers.id(orderId);
+  const tokenAddress = TOKENS[tokenSymbol] ?? ethers.ZeroAddress;
   const amountWei = ethers.parseEther(amount.toString());
 
-  const tx = await contract.refundBuyer(orderIdBytes, amountWei);
+  let tx;
+  if (tokenSymbol === 'CELO') {
+    tx = await contract.lockFunds(orderIdBytes, buyerAddress, sellerAddress, tokenAddress, amountWei, { value: amountWei });
+  } else {
+    // For ERC-20 the admin wallet must have approved the contract first
+    tx = await contract.lockFunds(orderIdBytes, buyerAddress, sellerAddress, tokenAddress, amountWei);
+  }
+
   const receipt = await tx.wait();
   return receipt.hash;
 }
 
 /**
- * Performs admin-signed Escrow dispute resolution.
+ * Admin approves a stage (1, 2, or 3).
+ * This credits the seller's claimable balance inside the contract.
+ * The seller must separately call sellerWithdraw() to receive funds.
  */
-async function triggerDisputeResolve(orderId, refundAmount) {
-  if (ESCROW_CONTRACT_ADDRESS === ethers.ZeroAddress) {
-    console.warn('[Escrow] Contract address not configured — skipping blockchain call');
-    return '0x_mock_tx_hash_for_development';
+async function triggerEscrowRelease(orderId, stage) {
+  if (!isEscrowDeployed()) {
+    console.warn(`[Escrow] Contract not deployed — skipping approveStage(${stage})`);
+    return MOCK_TX;
+  }
+
+  if (stage < 1 || stage > 3) throw new Error('Invalid stage: must be 1, 2, or 3');
+
+  const contract = getEscrowContract();
+  const orderIdBytes = ethers.id(orderId);
+  const tx = await contract.approveStage(orderIdBytes, stage);
+  const receipt = await tx.wait();
+  return receipt.hash;
+}
+
+/**
+ * Admin refunds all remaining locked (unapproved) funds to the buyer.
+ * Any already-approved seller amounts remain claimable by the seller.
+ */
+async function triggerEscrowRefund(orderId) {
+  if (!isEscrowDeployed()) {
+    console.warn('[Escrow] Contract not deployed — skipping refundBuyer');
+    return MOCK_TX;
   }
 
   const contract = getEscrowContract();
   const orderIdBytes = ethers.id(orderId);
-  const refundWei = ethers.parseEther(refundAmount.toString());
-
-  const tx = await contract.resolveDispute(orderIdBytes, refundWei);
+  const tx = await contract.refundBuyer(orderIdBytes);
   const receipt = await tx.wait();
   return receipt.hash;
+}
+
+/**
+ * Admin resolves a dispute: sellerShare goes to seller's claimable balance,
+ * the rest is refunded to the buyer immediately.
+ */
+async function triggerDisputeResolve(orderId, sellerShare) {
+  if (!isEscrowDeployed()) {
+    console.warn('[Escrow] Contract not deployed — skipping resolveDispute');
+    return MOCK_TX;
+  }
+
+  const contract = getEscrowContract();
+  const orderIdBytes = ethers.id(orderId);
+  const sellerShareWei = ethers.parseEther(sellerShare.toString());
+  const tx = await contract.resolveDispute(orderIdBytes, sellerShareWei);
+  const receipt = await tx.wait();
+  return receipt.hash;
+}
+
+/**
+ * Returns how much a seller can currently withdraw for a given order.
+ */
+async function getSellerClaimable(orderId) {
+  if (!isEscrowDeployed()) return '0';
+  const contract = getEscrowContract();
+  const orderIdBytes = ethers.id(orderId);
+  const wei = await contract.getSellerClaimable(orderIdBytes);
+  return ethers.formatEther(wei);
 }
 
 module.exports = {
@@ -196,7 +250,9 @@ module.exports = {
   generateWallet,
   getBalances,
   transferTokens,
+  lockEscrowFunds,
   triggerEscrowRelease,
   triggerEscrowRefund,
-  triggerDisputeResolve
+  triggerDisputeResolve,
+  getSellerClaimable
 };

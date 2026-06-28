@@ -17,7 +17,8 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { apiRequest, saveToken, removeToken, saveUser, removeUser } from '../utils/api';
+import { apiRequest, saveToken, saveUser } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 import { ShoppingBag, ShieldAlert, Store, User, LogOut, KeyRound, Search, ChevronDown, HelpCircle, Lock, Menu, Bell, ShoppingCart, X, Package, Wallet, AlertTriangle, Info, Eye, EyeOff } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 
@@ -26,7 +27,7 @@ function HeaderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const { user: currentUser, refreshProfile, logout: authLogout } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -69,21 +70,7 @@ function HeaderContent() {
     }
   };
 
-  const loadProfile = async () => {
-    try {
-      const res = await apiRequest('/auth/profile');
-      if (res.success) {
-        setCurrentUser(res.data);
-      }
-    } catch (err) {
-      setCurrentUser(null);
-    }
-  };
-
-  // Re-read user on every navigation (layout stays mounted in App Router)
-  useEffect(() => {
-    loadProfile();
-  }, [pathname]);
+  // No per-navigation profile fetch — AuthContext handles it globally
 
   // Sync header search inputs when URL changes
   useEffect(() => {
@@ -143,7 +130,7 @@ function HeaderContent() {
         });
         saveToken(loginRes.data.accessToken);
         if (loginRes.data.user) saveUser(loginRes.data.user);
-        await loadProfile();
+        await refreshProfile();
         setShowAuthModal(false);
         router.push('/dashboard');
       }
@@ -156,10 +143,7 @@ function HeaderContent() {
 
   const handleLogout = async () => {
     try { await apiRequest('/auth/logout', { method: 'POST' }); } catch {}
-    removeToken();
-    removeUser();
-    setCurrentUser(null);
-    router.push('/');
+    authLogout();
   };
 
 

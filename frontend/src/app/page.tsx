@@ -22,20 +22,50 @@ import {
 import Link from 'next/link';
 import { apiRequest } from '../utils/api';
 
-const CAT_IMAGES: Record<string, string> = {
-  'Electronics':         'https://images.unsplash.com/photo-1498049794561-7780e7231661?auto=format&fit=crop&q=80&w=600',
-  'Digital Services':   'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=600',
-  'Apparel & Fashion':  'https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&q=80&w=600',
-  'Home & Kitchen':     'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&q=80&w=600',
-  'Health & Beauty':    'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&q=80&w=600',
-  'Sports & Outdoors':  'https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?auto=format&fit=crop&q=80&w=600',
-  'Books & Media':      'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?auto=format&fit=crop&q=80&w=600',
-  'Art & Collectibles': 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?auto=format&fit=crop&q=80&w=600',
+const CAT_KEYWORD_MAP: Array<[string, string]> = [
+  ['phone',       'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&q=80&w=600'],
+  ['tablet',      'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&q=80&w=600'],
+  ['laptop',      'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&q=80&w=600'],
+  ['computer',    'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&q=80&w=600'],
+  ['electronic',  'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?auto=format&fit=crop&q=80&w=600'],
+  ['tech',        'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?auto=format&fit=crop&q=80&w=600'],
+  ['gadget',      'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?auto=format&fit=crop&q=80&w=600'],
+  ['digital',     'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=600'],
+  ['software',    'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=600'],
+  ['service',     'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=600'],
+  ['fashion',     'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=600'],
+  ['apparel',     'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=600'],
+  ['cloth',       'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=600'],
+  ['wear',        'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=600'],
+  ['men',         'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=600'],
+  ['women',       'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=600'],
+  ['kitchen',     'https://images.unsplash.com/photo-1556909172-54557c7e4fb7?auto=format&fit=crop&q=80&w=600'],
+  ['furniture',   'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&q=80&w=600'],
+  ['home',        'https://images.unsplash.com/photo-1556909172-54557c7e4fb7?auto=format&fit=crop&q=80&w=600'],
+  ['living',      'https://images.unsplash.com/photo-1556909172-54557c7e4fb7?auto=format&fit=crop&q=80&w=600'],
+  ['health',      'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?auto=format&fit=crop&q=80&w=600'],
+  ['beauty',      'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?auto=format&fit=crop&q=80&w=600'],
+  ['cosmetic',    'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?auto=format&fit=crop&q=80&w=600'],
+  ['wellness',    'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?auto=format&fit=crop&q=80&w=600'],
+  ['sport',       'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&q=80&w=600'],
+  ['outdoor',     'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&q=80&w=600'],
+  ['fitness',     'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&q=80&w=600'],
+  ['book',        'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=600'],
+  ['media',       'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=600'],
+  ['music',       'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=600'],
+  ['art',         'https://images.unsplash.com/photo-1561214115-f2f134cc4912?auto=format&fit=crop&q=80&w=600'],
+  ['collect',     'https://images.unsplash.com/photo-1561214115-f2f134cc4912?auto=format&fit=crop&q=80&w=600'],
+  ['craft',       'https://images.unsplash.com/photo-1561214115-f2f134cc4912?auto=format&fit=crop&q=80&w=600'],
+];
+
+const getCatImage = (name: string): string => {
+  const lower = name.toLowerCase();
+  const hit = CAT_KEYWORD_MAP.find(([kw]) => lower.includes(kw));
+  return hit ? hit[1] : 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&q=80&w=600';
 };
-const getCatImage = (name: string) =>
-  CAT_IMAGES[name] || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&q=80&w=600';
 
 const CAT_DESC: Record<string, string> = {
+  // controller-seeded names
   'Electronics':         'Hardware wallets, secure devices, Celo-compatible electronics.',
   'Digital Services':   'Domain names, SaaS tokens, subscriptions, and certificates.',
   'Apparel & Fashion':  'Exclusive drops, streetwear, and merchandise with NFC tags.',
@@ -44,6 +74,15 @@ const CAT_DESC: Record<string, string> = {
   'Sports & Outdoors':  'Equipment, activewear, and outdoor gear from trusted merchants.',
   'Books & Media':      'Physical books, media, educational resources, and collectibles.',
   'Art & Collectibles': 'NFT-backed physical art, limited editions, and collectibles.',
+  // seeder names
+  'Fashion':            'Exclusive drops, streetwear, and verified fashion from trusted sellers.',
+  'Home & Living':      'Furniture, décor, and household items with delivery guarantees.',
+  'Phones & Tablets':   'Smartphones, tablets, and mobile accessories — escrow protected.',
+  'Laptops & Computers':'Laptops, desktops, and computing gear from verified merchants.',
+  "Men's Wear":         'Streetwear, formal wear, and accessories for men.',
+  "Women's Wear":       'Fashion, activewear, and accessories for women.',
+  'Furniture':          'Sofas, beds, desks and home furniture — secured delivery.',
+  'Kitchenware':        'Cookware, appliances, and kitchen essentials.',
 };
 
 // Interactive Escrow Simulator Stages data
@@ -529,7 +568,7 @@ export default function Home() {
                   <div>
                     <div className="h-44 overflow-hidden relative bg-neutral-100">
                       <img
-                        src={getCatImage(cat.name)}
+                        src={cat.image?.url || getCatImage(cat.name)}
                         alt={cat.name}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />

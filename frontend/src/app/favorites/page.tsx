@@ -83,7 +83,7 @@ export default function FavoritesPage() {
                   <Link href={`/products/${product.id}`}>
                     <div className="h-36 overflow-hidden bg-neutral-100">
                       {product.images?.[0] ? (
-                        <img src={product.images[0]} alt={product.title} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        <img src={product.images[0]?.url || product.images[0]?.imageUrl || (typeof product.images[0] === 'string' ? product.images[0] : '')} alt={product.title} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
                       ) : (
                         <div className="h-full w-full bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center">
                           <ShoppingBag className="h-8 w-8 text-amber-400" />
@@ -106,7 +106,7 @@ export default function FavoritesPage() {
                     <span className="text-[10px] text-emerald-600 font-medium">Escrow</span>
                   </div>
                   <button
-                    onClick={() => addItem({ id: product.id, title: product.title, price: product.price, image: product.images?.[0] || '', storeId: product.storeId || '', storeName: product.store?.name || 'Vendly Store' })}
+                    onClick={() => addItem({ id: product.id, title: product.title, price: product.price, image: product.images?.[0]?.url || product.images?.[0]?.imageUrl || (typeof product.images?.[0] === 'string' ? product.images[0] : ''), storeId: product.storeId || '', storeName: product.store?.displayName || product.store?.name || 'Vendly Store' })}
                     className="w-full mt-2 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-colors">
                     Add to Cart
                   </button>

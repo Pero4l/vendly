@@ -124,7 +124,8 @@ export default function SettingsPage() {
               <LogOut className="h-4 w-4 text-neutral-500" />
               <span className="text-sm font-medium text-neutral-800">Sign Out</span>
             </button>
-            <button onClick={() => window.confirm('Delete your account? This cannot be undone.') && alert('Contact support to delete your account.')}
+            <button
+              onClick={() => window.confirm('Delete your account? This cannot be undone. You will be redirected to support.') && router.push('/support')}
               className="w-full flex items-center gap-3 px-5 py-4 hover:bg-rose-50 transition-colors text-left">
               <Trash2 className="h-4 w-4 text-rose-500" />
               <span className="text-sm font-medium text-rose-600">Delete Account</span>

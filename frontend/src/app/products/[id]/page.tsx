@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Header from '../../../components/Header';
 import { apiRequest, getUser } from '../../../utils/api';
-import { ShoppingCart, ShieldCheck, RefreshCw, ArrowLeft, Truck, Package, ShieldAlert, Award, ChevronRight, Heart, Store } from 'lucide-react';
+import { ShoppingCart, ShieldCheck, RefreshCw, ArrowLeft, Truck, Package, Award, ChevronRight, Heart, Store, Star, MessageSquare, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useCart } from '../../../context/CartContext';
 
@@ -22,19 +22,45 @@ export default function ProductDetails() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [cartAdded, setCartAdded] = useState(false);
   const [isOwnProduct, setIsOwnProduct] = useState(false);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [eligibleOrders, setEligibleOrders] = useState<any[]>([]);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewHover, setReviewHover] = useState(0);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewOrderId, setReviewOrderId] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewSuccess, setReviewSuccess] = useState(false);
   const { addItem } = useCart();
+
+  const fetchReviews = async () => {
+    try {
+      const res = await apiRequest(`/products/${id}/reviews`);
+      if (res.success) setReviews(res.data || []);
+    } catch {}
+  };
 
   const fetchProduct = async () => {
     try {
       const res = await apiRequest(`/products/${id}`);
       if (res.success) {
         setProduct(res.data);
-        // Check if current user owns this product's store
         const user = getUser();
         if (user?.role === 'seller') {
           const storeRes = await apiRequest('/stores/my-store').catch(() => null);
           if (storeRes?.success && storeRes.data?.id === res.data?.storeId) {
             setIsOwnProduct(true);
+          }
+        }
+        // Load eligible orders for review (buyer who purchased this product)
+        if (user?.role === 'buyer') {
+          const ordersRes = await apiRequest('/orders').catch(() => null);
+          if (ordersRes?.success) {
+            const eligible = (ordersRes.data || []).filter((o: any) =>
+              ['delivered', 'completed'].includes(o.status) &&
+              o.items?.some((item: any) => item.productId === res.data.id)
+            );
+            setEligibleOrders(eligible);
+            if (eligible.length > 0) setReviewOrderId(eligible[0].id);
           }
         }
       }
@@ -45,8 +71,30 @@ export default function ProductDetails() {
     }
   };
 
+  const handleSubmitReview = async () => {
+    if (!reviewRating || !reviewOrderId) return;
+    setReviewSubmitting(true);
+    try {
+      const res = await apiRequest('/products/reviews', {
+        method: 'POST',
+        body: JSON.stringify({ productId: id, orderId: reviewOrderId, rating: reviewRating, comment: reviewComment })
+      });
+      if (res.success) {
+        setReviewSuccess(true);
+        setReviewRating(0);
+        setReviewComment('');
+        await fetchReviews();
+        // Refresh product to get updated averageRating
+        const pRes = await apiRequest(`/products/${id}`);
+        if (pRes.success) setProduct(pRes.data);
+      }
+    } catch {}
+    finally { setReviewSubmitting(false); }
+  };
+
   useEffect(() => {
     fetchProduct();
+    fetchReviews();
     try {
       const favs = JSON.parse(localStorage.getItem('vendly_favorites') || '[]');
       setIsFavorite(favs.includes(String(id)));
@@ -68,9 +116,9 @@ export default function ProductDetails() {
       id: product.id,
       title: product.title,
       price: String(product.price),
-      image: product.images?.[0] || '',
+      image: product.images?.[0]?.url || product.images?.[0]?.imageUrl || (typeof product.images?.[0] === 'string' ? product.images[0] : ''),
       storeId: product.storeId || '',
-      storeName: product.store?.name || 'Vendly Store'
+      storeName: product.store?.displayName || product.store?.name || 'Vendly Store'
     });
     setCartAdded(true);
     setTimeout(() => setCartAdded(false), 2000);
@@ -78,7 +126,7 @@ export default function ProductDetails() {
 
   const handlePurchase = async () => {
     setPurchaseLoading(true);
-    setStatusMessage('Sandbox Mode: Initializing order...');
+    setStatusMessage('Placing order...');
     setErrorMsg('');
 
     try {
@@ -95,13 +143,8 @@ export default function ProductDetails() {
       }
 
       const orderId = orderRes.data.id;
-      setStatusMessage('Sandbox Mode: Simulating locked smart-escrow deposit...');
-      
-      // Simulate blockchain lag
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      const mockTx = '0x' + Math.random().toString(16).substr(2, 40) + 'ab82';
-      await confirmPaymentOnBackend(mockTx, orderId);
+      setStatusMessage('Locking funds in escrow...');
+      await confirmPaymentOnBackend(null, orderId);
     } catch (err: any) {
       setErrorMsg(err.message || 'Sandbox purchase failed');
       setPurchaseLoading(false);
@@ -109,19 +152,19 @@ export default function ProductDetails() {
     }
   };
 
-  const confirmPaymentOnBackend = async (hash: string, orderId: string) => {
-    setStatusMessage('Confirming transaction hash with audit log...');
+  const confirmPaymentOnBackend = async (hash: string | null, orderId: string) => {
+    setStatusMessage('Confirming order...');
     try {
       await apiRequest('/orders/confirm-payment', {
         method: 'POST',
         body: JSON.stringify({ orderId, txHash: hash })
       });
-      setStatusMessage('Success! Funds locked in 3-stage escrow. Redirecting...');
+      setStatusMessage('Order placed! Funds locked in 3-stage escrow. Redirecting...');
       setTimeout(() => {
-        router.push('/dashboard');
+        router.push('/orders');
       }, 2000);
     } catch (err: any) {
-      setErrorMsg(`Payment confirmed on-chain, but failed syncing backend: ${err.message}`);
+      setErrorMsg(`Order created but payment sync failed: ${err.message}`);
     } finally {
       setPurchaseLoading(false);
     }
@@ -157,10 +200,8 @@ export default function ProductDetails() {
   const usdPrice = (parseFloat(product.price) * 0.70).toFixed(2);
   const totalUsdCost = (parseFloat(totalCost) * 0.70).toFixed(2);
 
-  // Mock seller statistics
-  const sellerRating = 4.9;
-  const sellerPositive = "98%";
-  const sellerOrders = 142;
+  const avgRating = product ? parseFloat(product.averageRating) || 0 : 0;
+  const totalReviews = product?.totalReviews || 0;
 
   return (
     <div className="flex flex-col min-h-screen bg-white text-neutral-900">
@@ -206,18 +247,25 @@ export default function ProductDetails() {
                 {product.title}
               </h1>
 
-              {/* Seller Reputation Block */}
+              {/* Seller + Rating Block */}
               <div className="flex flex-wrap items-center gap-4 bg-neutral-50 p-4 rounded-xl border border-neutral-200">
-                <div className="flex items-center gap-2">
-                  <Award className="h-5 w-5 text-amber-500" />
+                <div className="flex items-center gap-2 flex-1">
+                  <Award className="h-5 w-5 text-amber-500 shrink-0" />
                   <div>
                     <p className="text-xs font-bold text-neutral-900 flex items-center gap-1">
-                      Merchant: {product.store?.name || 'Celo Alpha Emporium'}
+                      Merchant: {product.store?.name || 'Vendly Store'}
                       <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.5 rounded font-black">VERIFIED</span>
                     </p>
-                    <p className="text-[10px] text-neutral-500">
-                      Seller Rating: <span className="font-bold text-neutral-700">{sellerRating} ★</span> ({sellerPositive} positive feedback over {sellerOrders} orders)
-                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className="flex text-amber-400">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star key={i} className={`h-3 w-3 ${i < Math.floor(avgRating) ? 'fill-current' : 'text-neutral-200'}`} />
+                        ))}
+                      </div>
+                      <span className="text-[10px] text-neutral-500 font-bold">
+                        {avgRating > 0 ? `${avgRating.toFixed(1)} (${totalReviews} review${totalReviews !== 1 ? 's' : ''})` : 'No reviews yet'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -281,6 +329,138 @@ export default function ProductDetails() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Reviews Section */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-black text-neutral-900 flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-amber-500" />
+                  Customer Reviews
+                  {totalReviews > 0 && (
+                    <span className="text-xs font-normal text-neutral-400">({totalReviews})</span>
+                  )}
+                </h3>
+                {avgRating > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex text-amber-400">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star key={i} className={`h-4 w-4 ${i < Math.floor(avgRating) ? 'fill-current' : 'text-neutral-200'}`} />
+                      ))}
+                    </div>
+                    <span className="text-sm font-black text-neutral-700">{avgRating.toFixed(1)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Write a review — only for buyers who purchased this product */}
+              {eligibleOrders.length > 0 && !isOwnProduct && !reviewSuccess && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 space-y-4">
+                  <h4 className="text-sm font-black text-neutral-900">Leave a Review</h4>
+
+                  {eligibleOrders.length > 1 && (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Order</label>
+                      <select
+                        value={reviewOrderId}
+                        onChange={e => setReviewOrderId(e.target.value)}
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      >
+                        {eligibleOrders.map((o: any) => (
+                          <option key={o.id} value={o.id}>Order #{o.orderNumber || o.id.slice(0, 8)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Your Rating</label>
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map(star => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setReviewRating(star)}
+                          onMouseEnter={() => setReviewHover(star)}
+                          onMouseLeave={() => setReviewHover(0)}
+                          className="cursor-pointer p-0.5 transition-transform hover:scale-110"
+                        >
+                          <Star className={`h-7 w-7 transition-colors ${star <= (reviewHover || reviewRating) ? 'text-amber-400 fill-amber-400' : 'text-neutral-300'}`} />
+                        </button>
+                      ))}
+                      {reviewRating > 0 && (
+                        <span className="ml-2 text-sm font-bold text-neutral-600 self-center">
+                          {['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent'][reviewRating]}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Comment (optional)</label>
+                    <textarea
+                      value={reviewComment}
+                      onChange={e => setReviewComment(e.target.value)}
+                      rows={3}
+                      placeholder="Share your experience with this product..."
+                      className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleSubmitReview}
+                    disabled={!reviewRating || reviewSubmitting}
+                    className="flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 px-5 py-2.5 text-xs font-bold text-white transition-colors cursor-pointer"
+                  >
+                    {reviewSubmitting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Star className="h-3.5 w-3.5" />}
+                    {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
+                  </button>
+                </div>
+              )}
+
+              {reviewSuccess && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 flex items-center gap-3">
+                  <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0" />
+                  <p className="text-sm font-bold text-emerald-800">Thank you for your review!</p>
+                </div>
+              )}
+
+              {/* Reviews list */}
+              {reviews.length === 0 ? (
+                <div className="rounded-2xl border border-neutral-200 bg-neutral-50 py-10 text-center">
+                  <Star className="mx-auto h-8 w-8 text-neutral-200 mb-2" />
+                  <p className="text-sm font-bold text-neutral-500">No reviews yet</p>
+                  <p className="text-xs text-neutral-400 mt-1">Be the first to review this product after purchase.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {reviews.map((r: any) => (
+                    <div key={r.id} className="rounded-2xl border border-neutral-200 bg-white p-5 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-xs font-black text-amber-700 shrink-0">
+                            {(r.reviewer?.fullName || r.reviewer?.username || 'U').charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-neutral-900">
+                              {r.reviewer?.fullName || r.reviewer?.username || 'Anonymous'}
+                            </p>
+                            <p className="text-[10px] text-neutral-400">{new Date(r.createdAt).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                        <div className="flex text-amber-400 shrink-0">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star key={i} className={`h-3.5 w-3.5 ${i < r.rating ? 'fill-current' : 'text-neutral-200'}`} />
+                          ))}
+                        </div>
+                      </div>
+                      {r.comment && (
+                        <p className="text-sm text-neutral-600 leading-relaxed pl-10">{r.comment}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
           </div>

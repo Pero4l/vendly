@@ -2,7 +2,6 @@
  * layout.tsx — Root Application Layout
  * ─────────────────────────────────────────────────────────────────
  * Wraps every page in:
- *  1. Web3Provider   — RainbowKit + Wagmi wallet context
  *  2. MobileTopBar   — sticky top bar shown only on mobile
  *  3. BottomNav      — fixed bottom tab bar shown only on mobile
  *

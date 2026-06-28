@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import Header from '../../components/Header';
+import { apiRequest } from '../../utils/api';
 import { MessageSquare, ArrowLeft, Send, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 const FAQ = [
@@ -21,12 +22,27 @@ export default function SupportPage() {
   const [success, setSuccess] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
+  const [error, setError] = useState('');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
-    setSuccess(true);
-    setLoading(false);
+    setError('');
+    try {
+      const res = await apiRequest('/support', {
+        method: 'POST',
+        body: JSON.stringify({ email, subject, message })
+      });
+      if (res.success) {
+        setSuccess(true);
+      } else {
+        setError(res.message || 'Failed to send message. Please try again.');
+      }
+    } catch {
+      setError('Failed to send message. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -104,6 +120,9 @@ export default function SupportPage() {
                   placeholder="Describe your issue in detail..."
                   className="w-full rounded-xl border border-neutral-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none" />
               </div>
+              {error && (
+                <p className="text-xs text-rose-600 font-medium">{error}</p>
+              )}
               <button type="submit" disabled={loading}
                 className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 py-3 text-sm font-bold text-white transition-colors disabled:opacity-60">
                 <Send className="h-4 w-4" />

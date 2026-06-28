@@ -274,7 +274,7 @@ export default function WalletPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-black text-neutral-950">My Vendly Wallet</h1>
-            <p className="text-xs text-neutral-500 mt-0.5">Custodial Celo wallet · auto-created for {profile?.name || 'your account'}</p>
+            <p className="text-xs text-neutral-500 mt-0.5">Custodial Celo wallet · auto-created for {profile?.fullName || profile?.username || 'your account'}</p>
           </div>
           <button
             onClick={handleRefresh}

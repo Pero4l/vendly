@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Header from '../../components/Header';
-import { apiRequest } from '../../utils/api';
+import { apiRequest, getUser } from '../../utils/api';
 import {
   ShieldCheck, Percent, CheckCircle, AlertTriangle, RefreshCw,
   XCircle, Coins, ShieldAlert, Store, Users, ShoppingBag,
@@ -21,6 +22,7 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 export default function AdminPanel() {
+  const router = useRouter();
   const [tab, setTab] = useState<AdminTab>('pending');
   const [pendingStores, setPendingStores] = useState<any[]>([]);
   const [allStores, setAllStores] = useState<any[]>([]);
@@ -33,6 +35,13 @@ export default function AdminPanel() {
   const [feePercentage, setFeePercentage] = useState('');
   const [refundAmounts, setRefundAmounts] = useState<Record<string, string>>({});
   const [settingsMsg, setSettingsMsg] = useState('');
+
+  useEffect(() => {
+    const user = getUser();
+    if (!user || user.role !== 'admin') {
+      router.replace('/dashboard');
+    }
+  }, [router]);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);

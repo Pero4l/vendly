@@ -76,10 +76,13 @@ async function createOrder(req, res, next) {
 
     await Escrow.create({
       orderId: order.id,
-      totalAmount,
+      buyerId: req.user.id,
+      sellerId: resolvedItems[0].sellerId,
+      amount: totalAmount,
       releasedAmount: 0,
-      stage: 0,
-      status: 'LOCKED'
+      remainingAmount: totalAmount,
+      stage: 1,
+      status: 'active'
     }, { transaction });
 
     await transaction.commit();

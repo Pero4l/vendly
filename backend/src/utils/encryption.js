@@ -1,9 +1,20 @@
 const crypto = require('crypto');
 require('dotenv').config();
 
-// The encryption key should be 32 bytes (256 bits)
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6'; // Fallback for dev only
 const ALGORITHM = 'aes-256-gcm';
+
+function getEncryptionKey() {
+  const key = process.env.ENCRYPTION_KEY;
+  if (!key) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('ENCRYPTION_KEY must be set in production. Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+    }
+    // Dev-only warning — never silently use a hardcoded fallback that could ship to prod
+    console.warn('[SECURITY] ENCRYPTION_KEY not set. Wallet keys are NOT securely encrypted. Set ENCRYPTION_KEY before storing real funds.');
+    return 'dev-only-insecure-key-do-not-use-in-production-ever';
+  }
+  return key;
+}
 const IV_LENGTH = 12; // GCM standard IV size
 const SALT_LENGTH = 16;
 const KEY_LENGTH = 32;
@@ -16,9 +27,8 @@ const KEY_LENGTH = 32;
 function encrypt(text) {
   const salt = crypto.randomBytes(SALT_LENGTH);
   const iv = crypto.randomBytes(IV_LENGTH);
-  
-  // Derives key from ENCRYPTION_KEY and salt for extra security
-  const key = crypto.pbkdf2Sync(ENCRYPTION_KEY, salt, 100000, KEY_LENGTH, 'sha256');
+
+  const key = crypto.pbkdf2Sync(getEncryptionKey(), salt, 100000, KEY_LENGTH, 'sha256');
   
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   
@@ -47,8 +57,8 @@ function decrypt(encryptedText) {
   const encrypted = parts[3];
   
   // Derives key
-  const key = crypto.pbkdf2Sync(ENCRYPTION_KEY, salt, 100000, KEY_LENGTH, 'sha256');
-  
+  const key = crypto.pbkdf2Sync(getEncryptionKey(), salt, 100000, KEY_LENGTH, 'sha256');
+
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
   
