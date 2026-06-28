@@ -14,7 +14,7 @@ import { useCart } from '../context/CartContext';
 const TABS = [
   { href: '/',            icon: Home,            label: 'Home' },
   { href: '/marketplace', icon: ShoppingBag,      label: 'Shop' },
-  { href: '/dashboard',   icon: LayoutDashboard,  label: 'Orders' },
+  { href: '/orders',      icon: Package,          label: 'Orders' },
   { href: '/wallet',      icon: Wallet,           label: 'Wallet' },
 ];
 
@@ -90,7 +90,7 @@ export default function BottomNav() {
 
             {/* Orders & Disputes */}
             <SectionLabel label="Orders" />
-            <MoreMenuItem href="/dashboard" icon={<Package className="h-5 w-5" />} label="Track Order" color="text-emerald-600" onPress={close} />
+            <MoreMenuItem href="/track-order" icon={<Package className="h-5 w-5" />} label="Track Order" color="text-emerald-600" onPress={close} />
             <MoreMenuItem href="/dashboard" icon={<AlertTriangle className="h-5 w-5" />} label="Disputes" color="text-rose-500" onPress={close} />
             <MoreMenuItem href="/cart" icon={<ShoppingCart className="h-5 w-5" />} label="My Cart" color="text-amber-600" badge={totalItems > 0} badgeCount={totalItems} onPress={close} />
 
@@ -112,6 +112,10 @@ export default function BottomNav() {
                 <MoreMenuItem href="/admin" icon={<Shield className="h-5 w-5" />} label="Admin Operations" color="text-rose-600" onPress={close} />
               </>
             )}
+
+            {/* Grow */}
+            <SectionLabel label="Grow" />
+            <MoreMenuItem href="/become-vendor" icon={<Store className="h-5 w-5" />} label="Become a Vendor" color="text-amber-600" onPress={close} />
 
             {/* Help */}
             <SectionLabel label="Help & Settings" />

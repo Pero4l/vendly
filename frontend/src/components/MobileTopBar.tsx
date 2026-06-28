@@ -15,7 +15,7 @@ export default function MobileTopBar() {
   }, []);
 
   return (
-    <header className="md:hidden sticky top-0 z-20 bg-white/95 backdrop-blur-lg border-b border-neutral-100">
+    <header className="md:hidden sticky top-0 z-50 bg-white/95 backdrop-blur-lg border-b border-neutral-100">
       <div className="flex items-center justify-between px-4 py-3">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-lg font-black tracking-tight text-neutral-900">VENDLY</span>

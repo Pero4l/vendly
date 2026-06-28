@@ -125,6 +125,7 @@ function HeaderContent() {
         if (loginRes.data.user) saveUser(loginRes.data.user);
         await loadProfile();
         setShowAuthModal(false);
+        router.push('/dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'Authentication failed');

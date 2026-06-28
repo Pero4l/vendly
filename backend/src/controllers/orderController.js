@@ -1,83 +1,103 @@
-const { Order, OrderItem, Product, Store, Escrow, sequelize } = require('../models');
-const { addTxMonitorJob } = require('../jobs/queue');
+const { Order, OrderItem, Product, Store, StoreProfile, Escrow, User, sequelize } = require('../models');
 const notificationService = require('../services/notificationService');
+
+function generateOrderNumber() {
+  return 'VND-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+}
 
 async function createOrder(req, res, next) {
   const transaction = await sequelize.transaction();
   try {
     const { items, shippingAddress } = req.body;
-    if (!items || !Array.isArray(items) || items.length === 0 || !shippingAddress) {
-      return res.status(400).json({ success: false, message: 'Invalid order request' });
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Order must include at least one item' });
+    }
+    if (!shippingAddress) {
+      return res.status(400).json({ success: false, message: 'Shipping address is required' });
     }
 
-    let totalAmount = BigInt(0);
-    let storeId = null;
+    let subtotal = 0;
+    const resolvedItems = [];
 
-    // Verify products and calculate total cost
     for (const item of items) {
       const product = await Product.findByPk(item.productId, { transaction });
-      if (!product || product.status !== 'ACTIVE' || product.quantity < item.quantity) {
-        throw new Error(`Product ${item.productId} is unavailable or insufficient stock`);
+      if (!product) throw new Error(`Product ${item.productId} not found`);
+      if (product.status === 'suspended' || product.status === 'deleted') {
+        throw new Error(`Product "${product.title}" is not available`);
+      }
+      if (product.quantity < item.quantity) {
+        throw new Error(`Insufficient stock for "${product.title}"`);
       }
 
-      if (storeId === null) {
-        storeId = product.storeId;
-      } else if (storeId !== product.storeId) {
-        throw new Error('Order items must be from the same store');
-      }
+      // Get the seller user id through the store
+      const store = await Store.findByPk(product.storeId, {
+        include: [{ model: StoreProfile, as: 'storeProfile', attributes: ['userId'] }],
+        transaction
+      });
+      if (!store) throw new Error('Store not found for product');
 
-      const cost = BigInt(Math.round(parseFloat(product.price) * 1e18)) * BigInt(item.quantity);
-      totalAmount += cost;
+      const unitPrice = parseFloat(product.price);
+      const totalPrice = unitPrice * item.quantity;
+      subtotal += totalPrice;
+
+      resolvedItems.push({ product, store, unitPrice, totalPrice, quantity: item.quantity, sellerId: store.storeProfile.userId });
     }
 
-    const orderAmountDecimal = parseFloat(totalAmount) / 1e18;
+    const totalAmount = subtotal; // no tax/shipping for escrow model
 
-    // Create order
     const order = await Order.create({
       buyerId: req.user.id,
-      storeId,
-      status: 'PENDING',
-      totalAmount: orderAmountDecimal,
-      shippingAddress
+      orderNumber: generateOrderNumber(),
+      shippingAddress: typeof shippingAddress === 'string' ? JSON.parse(shippingAddress) : shippingAddress,
+      subtotal,
+      shippingFee: 0,
+      tax: 0,
+      totalAmount,
+      paymentMethod: 'escrow',
+      status: 'pending'
     }, { transaction });
 
-    // Create order items
-    for (const item of items) {
-      const product = await Product.findByPk(item.productId, { transaction });
+    for (const ri of resolvedItems) {
       await OrderItem.create({
         orderId: order.id,
-        productId: item.productId,
-        quantity: item.quantity,
-        price: product.price
+        productId: ri.product.id,
+        sellerId: ri.sellerId,
+        quantity: ri.quantity,
+        unitPrice: ri.unitPrice,
+        totalPrice: ri.totalPrice
       }, { transaction });
 
-      // Deduct stock temporarily
-      product.quantity -= item.quantity;
-      if (product.quantity === 0) product.status = 'OUT_OF_STOCK';
-      await product.save({ transaction });
+      // Deduct stock
+      await ri.product.update({
+        quantity: ri.product.quantity - ri.quantity,
+        status: (ri.product.quantity - ri.quantity) <= 0 ? 'out_of_stock' : ri.product.status
+      }, { transaction });
     }
 
-    // Initialize Database Escrow Record
     await Escrow.create({
       orderId: order.id,
-      totalAmount: orderAmountDecimal,
-      releasedAmount: 0.0,
+      totalAmount,
+      releasedAmount: 0,
       stage: 0,
       status: 'LOCKED'
     }, { transaction });
 
     await transaction.commit();
 
-    // Notify seller of pending order
-    const store = await Store.findByPk(storeId);
-    if (store) {
-      await notificationService.notifyUser(
-        store.ownerId,
-        'New Order Received',
-        `You have a new order: ${order.id} for amount ${orderAmountDecimal} CELO/Tokens.`,
-        'order_status'
-      );
+    // Notify sellers
+    const notifiedSellers = new Set();
+    for (const ri of resolvedItems) {
+      if (!notifiedSellers.has(ri.sellerId)) {
+        try {
+          await notificationService.notifyUser(ri.sellerId, 'New Order', `Order ${order.orderNumber} placed for your store.`, 'order');
+        } catch {}
+        notifiedSellers.add(ri.sellerId);
+      }
     }
+
+    try {
+      await notificationService.notifyUser(req.user.id, 'Order Placed', `Your order ${order.orderNumber} is confirmed and secured in escrow.`, 'order');
+    } catch {}
 
     res.status(201).json({ success: true, message: 'Order created successfully', data: order });
   } catch (error) {
@@ -89,34 +109,20 @@ async function createOrder(req, res, next) {
 async function confirmPayment(req, res, next) {
   try {
     const { orderId, txHash } = req.body;
-    if (!orderId || !txHash) {
-      return res.status(400).json({ success: false, message: 'Missing payment confirmation parameters' });
-    }
+    if (!orderId) return res.status(400).json({ success: false, message: 'orderId is required' });
 
     const order = await Order.findByPk(orderId, { include: [{ model: Escrow, as: 'escrow' }] });
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    if (order.buyerId !== req.user.id) return res.status(403).json({ success: false, message: 'Unauthorized' });
 
-    order.txHash = txHash;
-    order.status = 'PAID';
-    await order.save();
+    await order.update({ status: 'paid', txHash: txHash || null });
+    if (order.escrow) await order.escrow.update({ status: 'LOCKED' });
 
-    if (order.escrow) {
-      order.escrow.status = 'LOCKED';
-      await order.escrow.save();
-    }
+    try {
+      await notificationService.notifyUser(order.buyerId, 'Payment Confirmed', `Payment for order ${order.orderNumber} is locked in escrow.`, 'escrow');
+    } catch {}
 
-    // Add background job to verify payment on Celo
-    // await addTxMonitorJob(txHash, order.id);
-
-    // Notify buyer
-    await notificationService.notifyUser(
-      order.buyerId,
-      'Payment Confirmed',
-      `Payment of ${order.totalAmount} for order ${order.id} is confirmed and locked in Escrow.`,
-      'order_status'
-    );
-
-    res.status(200).json({ success: true, message: 'Payment registered, pending blockchain confirmation', data: order });
+    res.status(200).json({ success: true, message: 'Payment confirmed', data: order });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -124,30 +130,35 @@ async function confirmPayment(req, res, next) {
 
 async function updateStatus(req, res, next) {
   try {
-    const { status } = req.body;
-    const order = await Order.findByPk(req.params.id, {
-      include: [{ model: Store, as: 'store' }]
-    });
-
-    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-
-    // Seller updates: PAID -> PROCESSING -> SHIPPED
-    if (order.store.ownerId !== req.user.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, message: 'Unauthorized status update' });
+    const { status, trackingNumber, carrier } = req.body;
+    const validStatuses = ['processing', 'shipped', 'delivered', 'cancelled'];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: `Status must be one of: ${validStatuses.join(', ')}` });
     }
 
-    order.status = status;
-    await order.save();
+    const order = await Order.findByPk(req.params.id, {
+      include: [{ model: OrderItem, as: 'items', include: [{ model: Product, as: 'product' }] }]
+    });
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
-    // Notify buyer
-    await notificationService.notifyUser(
-      order.buyerId,
-      'Order Status Updated',
-      `Your order ${order.id} has been marked as ${status}.`,
-      'order_status'
-    );
+    // Check if the requester is seller of items in this order or admin
+    if (req.user.role !== 'admin') {
+      const storeProfile = await StoreProfile.findOne({ where: { userId: req.user.id } });
+      const store = storeProfile ? await Store.findOne({ where: { storeProfileId: storeProfile.id } }) : null;
+      const productIds = order.items.map(i => i.productId);
+      const sellerProducts = await Product.findAll({ where: { id: productIds, storeId: store?.id || 'none' } });
+      if (sellerProducts.length === 0) {
+        return res.status(403).json({ success: false, message: 'Unauthorized: you do not own items in this order' });
+      }
+    }
 
-    res.status(200).json({ success: true, message: 'Status updated successfully', data: order });
+    await order.update({ status });
+
+    try {
+      await notificationService.notifyUser(order.buyerId, 'Order Updated', `Your order ${order.orderNumber} status: ${status}.`, 'order');
+    } catch {}
+
+    res.status(200).json({ success: true, message: 'Order status updated', data: order });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -155,20 +166,40 @@ async function updateStatus(req, res, next) {
 
 async function getOrders(req, res, next) {
   try {
-    const filters = {};
-    if (req.user.role === 'BUYER') {
-      filters.buyerId = req.user.id;
-    } else if (req.user.role === 'SELLER') {
-      const store = await Store.findOne({ where: { ownerId: req.user.id } });
+    let whereClause = {};
+
+    if (req.user.role === 'seller') {
+      // Find seller's store products, then orders containing those products
+      const storeProfile = await StoreProfile.findOne({ where: { userId: req.user.id } });
+      if (!storeProfile) return res.status(200).json({ success: true, data: [] });
+      const store = await Store.findOne({ where: { storeProfileId: storeProfile.id } });
       if (!store) return res.status(200).json({ success: true, data: [] });
-      filters.storeId = store.id;
+
+      const storeProducts = await Product.findAll({ where: { storeId: store.id }, attributes: ['id'] });
+      if (storeProducts.length === 0) return res.status(200).json({ success: true, data: [] });
+
+      const productIds = storeProducts.map(p => p.id);
+      const sellerItems = await OrderItem.findAll({ where: { productId: productIds }, attributes: ['orderId'] });
+      const orderIds = [...new Set(sellerItems.map(i => i.orderId))];
+      if (orderIds.length === 0) return res.status(200).json({ success: true, data: [] });
+
+      whereClause = { id: orderIds };
+    } else if (req.user.role === 'admin') {
+      // Admin sees all orders
+    } else {
+      // Buyer sees their own orders
+      whereClause = { buyerId: req.user.id };
     }
 
     const orders = await Order.findAll({
-      where: filters,
+      where: whereClause,
       include: [
-        { model: OrderItem, as: 'items', include: [{ model: Product, as: 'product' }] },
-        { model: Escrow, as: 'escrow' }
+        {
+          model: OrderItem, as: 'items',
+          include: [{ model: Product, as: 'product', attributes: ['id', 'title', 'images', 'price'] }]
+        },
+        { model: Escrow, as: 'escrow' },
+        { model: User, as: 'buyer', attributes: ['id', 'fullName', 'username', 'email'] }
       ],
       order: [['createdAt', 'DESC']]
     });
@@ -179,9 +210,23 @@ async function getOrders(req, res, next) {
   }
 }
 
-module.exports = {
-  createOrder,
-  confirmPayment,
-  updateStatus,
-  getOrders
-};
+async function getOrderById(req, res, next) {
+  try {
+    const order = await Order.findByPk(req.params.id, {
+      include: [
+        { model: OrderItem, as: 'items', include: [{ model: Product, as: 'product' }] },
+        { model: Escrow, as: 'escrow' },
+        { model: User, as: 'buyer', attributes: ['id', 'fullName', 'username', 'email'] }
+      ]
+    });
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    if (order.buyerId !== req.user.id && req.user.role !== 'admin' && req.user.role !== 'seller') {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+    res.status(200).json({ success: true, data: order });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { createOrder, confirmPayment, updateStatus, getOrders, getOrderById };

@@ -1,64 +1,64 @@
 const { Product, Store, StoreProfile, Category } = require('../models');
 const { Op } = require('sequelize');
 
-/**
- * Helper to generate a unique slug for a product.
- */
 async function generateUniqueProductSlug(title) {
-  let slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  if (!slug) slug = 'product';
-
+  let slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'product';
   let existing = await Product.findOne({ where: { slug } });
-  let counter = 1;
-  let uniqueSlug = slug;
+  let counter = 1, uniqueSlug = slug;
   while (existing) {
-    uniqueSlug = `${slug}-${counter}`;
+    uniqueSlug = `${slug}-${counter++}`;
     existing = await Product.findOne({ where: { slug: uniqueSlug } });
-    counter++;
   }
   return uniqueSlug;
+}
+
+// Normalise images to always be [{url:'...'}] array stored as JSONB
+function normaliseImages(images) {
+  if (!images) return null;
+  if (Array.isArray(images)) {
+    return images.map(img => (typeof img === 'string' ? { url: img } : { url: img.url || img.imageUrl || '' }));
+  }
+  if (typeof images === 'string') return [{ url: images }];
+  if (typeof images === 'object' && (images.url || images.imageUrl)) return [{ url: images.url || images.imageUrl }];
+  return null;
 }
 
 async function createProduct(req, res, next) {
   try {
     const { title, description, price, quantity, categoryId, images } = req.body;
-    if (!title || !price || !categoryId) {
-      return res.status(400).json({ success: false, message: 'Missing product parameters (title, price, and categoryId are required)' });
+    if (!title || !price) {
+      return res.status(400).json({ success: false, message: 'title and price are required' });
     }
 
-    // Retrieve user's store
     const storeProfile = await StoreProfile.findOne({ where: { userId: req.user.id } });
-    if (!storeProfile) {
-      return res.status(400).json({ success: false, message: 'Please apply for a vendor account first' });
-    }
+    if (!storeProfile) return res.status(400).json({ success: false, message: 'Apply for a vendor account first' });
 
     const store = await Store.findOne({ where: { storeProfileId: storeProfile.id } });
-    if (!store) {
-      return res.status(400).json({ success: false, message: 'Store not found' });
-    }
+    if (!store) return res.status(400).json({ success: false, message: 'Store not found' });
+    if (store.status === 'suspended') return res.status(403).json({ success: false, message: 'Store is suspended' });
 
-    if (store.status !== 'active') {
-      return res.status(403).json({ success: false, message: 'Store profile is not active yet' });
+    // Resolve category: if categoryId not provided or looks like a number, find or use first available
+    let resolvedCategoryId = categoryId;
+    if (!resolvedCategoryId) {
+      const firstCat = await Category.findOne({ where: { isActive: true } });
+      if (!firstCat) return res.status(400).json({ success: false, message: 'No categories available. Seed categories first.' });
+      resolvedCategoryId = firstCat.id;
     }
-
-    // Enforce 1 single product image
-    const imageJson = images ? (typeof images === 'string' ? { url: images } : { url: images.url }) : null;
 
     const slug = await generateUniqueProductSlug(title);
-
     const product = await Product.create({
       storeId: store.id,
+      categoryId: resolvedCategoryId,
       title,
       description,
       price,
-      quantity: quantity || 0,
-      categoryId,
-      images: imageJson,
+      quantity: quantity !== undefined ? parseInt(quantity) : 0,
+      images: normaliseImages(images),
       slug,
       status: 'active'
     });
 
-    res.status(201).json({ success: true, message: 'Product created successfully', data: product });
+    res.status(201).json({ success: true, message: 'Product created', data: product });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -66,42 +66,28 @@ async function createProduct(req, res, next) {
 
 async function listProducts(req, res, next) {
   try {
-    const { search, categoryId, minPrice, maxPrice, sortBy, order } = req.query;
+    const { search, categoryId, storeId, minPrice, maxPrice, sortBy, order } = req.query;
+    const filter = { status: ['active', 'out_of_stock'] };
 
-    const filter = { status: 'active' };
-
-    if (search) {
-      filter[Op.or] = [
-        { title: { [Op.iLike]: `%${search}%` } },
-        { description: { [Op.iLike]: `%${search}%` } }
-      ];
-    }
-
-    if (categoryId) {
-      filter.categoryId = categoryId;
-    }
-
+    if (search) filter[Op.or] = [
+      { title: { [Op.iLike]: `%${search}%` } },
+      { description: { [Op.iLike]: `%${search}%` } }
+    ];
+    if (categoryId) filter.categoryId = categoryId;
+    if (storeId) filter.storeId = storeId;
     if (minPrice || maxPrice) {
       filter.price = {};
       if (minPrice) filter.price[Op.gte] = parseFloat(minPrice);
       if (maxPrice) filter.price[Op.lte] = parseFloat(maxPrice);
     }
 
-    const sortField = sortBy || 'createdAt';
-    const sortOrder = order || 'DESC';
-
     const products = await Product.findAll({
       where: filter,
       include: [
-        { 
-          model: Store, 
-          as: 'store', 
-          attributes: ['name', 'slug'],
-          include: [{ model: StoreProfile, as: 'storeProfile', attributes: ['userId'] }]
-        },
-        { model: Category, as: 'category', attributes: ['name'] }
+        { model: Store, as: 'store', attributes: ['id', 'name', 'slug'] },
+        { model: Category, as: 'category', attributes: ['id', 'name'] }
       ],
-      order: [[sortField, sortOrder]]
+      order: [[sortBy || 'createdAt', order || 'DESC']]
     });
 
     res.status(200).json({ success: true, data: products });
@@ -114,20 +100,11 @@ async function getProductDetails(req, res, next) {
   try {
     const product = await Product.findByPk(req.params.id, {
       include: [
-        { 
-          model: Store, 
-          as: 'store', 
-          attributes: ['name', 'description', 'slug'],
-          include: [{ model: StoreProfile, as: 'storeProfile', attributes: ['userId', 'logo', 'banner'] }]
-        },
-        { model: Category, as: 'category', attributes: ['name'] }
+        { model: Store, as: 'store', attributes: ['id', 'name', 'description', 'slug'] },
+        { model: Category, as: 'category', attributes: ['id', 'name'] }
       ]
     });
-
-    if (!product) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
-    }
-
+    if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
     res.status(200).json({ success: true, data: product });
   } catch (error) {
     next(error);
@@ -137,38 +114,25 @@ async function getProductDetails(req, res, next) {
 async function updateProduct(req, res, next) {
   try {
     const { title, description, price, quantity, status, categoryId, images } = req.body;
-    
     const product = await Product.findByPk(req.params.id, {
-      include: [
-        { 
-          model: Store, 
-          as: 'store',
-          include: [{ model: StoreProfile, as: 'storeProfile', attributes: ['userId'] }]
-        }
-      ]
+      include: [{ model: Store, as: 'store', include: [{ model: StoreProfile, as: 'storeProfile', attributes: ['userId'] }] }]
     });
-
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
-
-    // Validate ownership (check store's profile owner userId)
     if (product.store.storeProfile.userId !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Unauthorized modification' });
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
-
-    // Enforce 1 single product image if provided
-    const imageJson = images ? (typeof images === 'string' ? { url: images } : { url: images.url }) : product.images;
 
     await product.update({
       title: title || product.title,
-      description: description || product.description,
+      description: description !== undefined ? description : product.description,
       price: price || product.price,
-      quantity: quantity !== undefined ? quantity : product.quantity,
+      quantity: quantity !== undefined ? parseInt(quantity) : product.quantity,
       categoryId: categoryId || product.categoryId,
-      images: imageJson,
+      images: images !== undefined ? normaliseImages(images) : product.images,
       status: status || product.status
     });
 
-    res.status(200).json({ success: true, message: 'Product updated successfully', data: product });
+    res.status(200).json({ success: true, message: 'Product updated', data: product });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -177,32 +141,17 @@ async function updateProduct(req, res, next) {
 async function deleteProduct(req, res, next) {
   try {
     const product = await Product.findByPk(req.params.id, {
-      include: [
-        { 
-          model: Store, 
-          as: 'store',
-          include: [{ model: StoreProfile, as: 'storeProfile', attributes: ['userId'] }]
-        }
-      ]
+      include: [{ model: Store, as: 'store', include: [{ model: StoreProfile, as: 'storeProfile', attributes: ['userId'] }] }]
     });
-
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
-
     if (product.store.storeProfile.userId !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Unauthorized removal' });
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
-
     await product.destroy();
-    res.status(200).json({ success: true, message: 'Product deleted successfully' });
+    res.status(200).json({ success: true, message: 'Product deleted' });
   } catch (error) {
-    next(error);
+    res.status(400).json({ success: false, message: error.message });
   }
 }
 
-module.exports = {
-  createProduct,
-  listProducts,
-  getProductDetails,
-  updateProduct,
-  deleteProduct
-};
+module.exports = { createProduct, listProducts, getProductDetails, updateProduct, deleteProduct };

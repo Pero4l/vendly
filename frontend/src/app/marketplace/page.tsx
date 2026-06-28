@@ -469,9 +469,10 @@ function MarketplaceContent() {
                 const usdEstimate = (parseFloat(product.price) * 0.70).toFixed(2);
 
                 return (
-                  <div 
-                    key={product.id} 
-                    className="group rounded-xl border border-neutral-200 bg-white overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow relative"
+                  <Link
+                    key={product.id}
+                    href={`/products/${product.id}`}
+                    className="group rounded-xl border border-neutral-200 bg-white overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow relative cursor-pointer"
                   >
                     {/* Top image wrapper */}
                     <div className="relative h-48 bg-neutral-100 overflow-hidden">
@@ -483,7 +484,7 @@ function MarketplaceContent() {
                       <span className="absolute top-3 right-3 rounded-full bg-neutral-900/90 px-3 py-1 text-xs font-black text-amber-400 tracking-wider">
                         {product.price} CELO
                       </span>
-                      <button onClick={(e) => { e.preventDefault(); toggleFavorite(product.id); }}
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFavorite(product.id); }}
                         className="absolute top-3 left-3 h-7 w-7 rounded-full bg-white/90 flex items-center justify-center shadow-sm transition-colors hover:bg-white">
                         <Heart className={`h-3.5 w-3.5 ${favorites.includes(product.id) ? 'text-rose-500 fill-rose-500' : 'text-neutral-400'}`} />
                       </button>
@@ -533,15 +534,12 @@ function MarketplaceContent() {
                             <span className="text-[10px] text-neutral-400 font-medium">Est. Price</span>
                             <span className="text-xs font-black text-neutral-700">${usdEstimate} USD</span>
                           </div>
-                          <Link
-                            href={`/products/${product.id}`}
-                            className="rounded-lg bg-amber-500 hover:bg-amber-600 px-3.5 py-2 text-xs font-bold text-white transition-colors cursor-pointer"
-                          >
+                          <span className="rounded-lg bg-amber-500 group-hover:bg-amber-600 px-3.5 py-2 text-xs font-bold text-white transition-colors">
                             View Deal
-                          </Link>
+                          </span>
                         </div>
                         <button
-                          onClick={() => handleAddToCart(product)}
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleAddToCart(product); }}
                           className={`w-full flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-bold transition-colors cursor-pointer ${addedToCart === product.id ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700'}`}
                         >
                           <ShoppingCart className="h-3.5 w-3.5" />
@@ -550,7 +548,7 @@ function MarketplaceContent() {
                       </div>
 
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>

@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Header from '../../components/Header';
 import { apiRequest, getUser, saveUser } from '../../utils/api';
-import { User, ArrowLeft, Save, KeyRound, Camera, CheckCircle, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { User, ArrowLeft, Save, KeyRound, Camera, CheckCircle, ShieldCheck, Eye, EyeOff, Upload } from 'lucide-react';
+import { getToken } from '../../utils/api';
 
 export default function ProfilePage() {
   const [tab, setTab] = useState<'profile' | 'security'>('profile');
@@ -26,6 +27,10 @@ export default function ProfilePage() {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const local = getUser();
@@ -91,9 +96,51 @@ export default function ProfilePage() {
     }
   };
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+  };
+
+  const handleAvatarUpload = async () => {
+    if (!avatarFile) return;
+    setAvatarUploading(true);
+    setError('');
+    try {
+      const token = getToken();
+      const form = new FormData();
+      form.append('image', avatarFile);
+      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      const res = await fetch(`${BASE_URL}/upload`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'Upload failed');
+      const updateRes = await apiRequest('/auth/profile', {
+        method: 'PUT',
+        body: JSON.stringify({ fullName, username, bio, avatar: data.url })
+      });
+      if (updateRes.success) {
+        saveUser(updateRes.data);
+        setProfile(updateRes.data);
+        setAvatarFile(null);
+        setSuccess('Profile picture updated!');
+        setTimeout(() => setSuccess(''), 3000);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload photo');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   const initials = profile
     ? (profile.fullName || profile.username || '?').slice(0, 2).toUpperCase()
     : '?';
+  const avatarSrc = avatarPreview || profile?.avatar;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -107,24 +154,51 @@ export default function ProfilePage() {
 
         {/* Avatar & name header */}
         <div className="bg-white rounded-2xl border border-neutral-100 p-6 mb-4 flex items-center gap-5">
-          <div className="relative">
-            {profile?.avatar ? (
-              <img src={profile.avatar} alt="Avatar" className="h-16 w-16 rounded-full object-cover" />
+          <div className="relative flex-shrink-0">
+            {avatarSrc ? (
+              <img src={avatarSrc} alt="Avatar" className="h-16 w-16 rounded-full object-cover" />
             ) : (
               <div className="h-16 w-16 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white font-black text-xl">
                 {initials}
               </div>
             )}
+            {/* Camera overlay */}
+            <button onClick={() => fileInputRef.current?.click()}
+              className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-white border-2 border-white shadow flex items-center justify-center hover:bg-neutral-50 transition-colors">
+              <Camera className="h-3.5 w-3.5 text-neutral-600" />
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAvatarChange} className="hidden" />
           </div>
-          <div>
-            <h1 className="text-lg font-black text-neutral-900">{profile?.fullName || profile?.username || 'Your Profile'}</h1>
-            <p className="text-sm text-neutral-400">@{profile?.username}</p>
-            <div className="flex items-center gap-1.5 mt-1">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-              <span className="text-xs text-emerald-600 font-medium">
-                {profile?.emailVerified ? 'Email Verified' : 'Email not verified'}
-              </span>
-            </div>
+          <div className="flex-1 min-w-0">
+            {avatarFile ? (
+              <div className="space-y-2">
+                <p className="text-sm font-bold text-neutral-700">New photo selected</p>
+                <div className="flex gap-2">
+                  <button onClick={handleAvatarUpload} disabled={avatarUploading}
+                    className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60">
+                    <Upload className="h-3 w-3" /> {avatarUploading ? 'Uploading...' : 'Save Photo'}
+                  </button>
+                  <button onClick={() => { setAvatarFile(null); setAvatarPreview(null); }}
+                    className="text-xs font-bold text-neutral-400 hover:text-neutral-700 px-2 py-1.5">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <h1 className="text-lg font-black text-neutral-900">{profile?.fullName || profile?.username || 'Your Profile'}</h1>
+                <p className="text-sm text-neutral-400">@{profile?.username}</p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                  <span className="text-xs text-emerald-600 font-medium">
+                    {profile?.emailVerified ? 'Email Verified' : 'Email not verified'}
+                  </span>
+                </div>
+                <button onClick={() => fileInputRef.current?.click()} className="text-xs font-bold text-amber-600 hover:underline mt-1">
+                  Change photo
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
