@@ -118,8 +118,17 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {isRegister && (
+              <p className="text-xs text-neutral-500 mt-3 text-center leading-relaxed">
+                By creating an account you agree to our{' '}
+                <Link href="/terms" className="font-bold text-amber-600 hover:underline">Terms & Conditions</Link>{' '}
+                and{' '}
+                <Link href="/terms#9" className="font-bold text-amber-600 hover:underline">Privacy Policy</Link>.
+              </p>
+            )}
+
             <button type="submit" disabled={loading}
-              className="w-full rounded-xl bg-amber-500 hover:bg-amber-600 py-3.5 text-sm font-bold text-white transition-colors mt-2 disabled:opacity-60 flex items-center justify-center gap-2">
+              className="w-full rounded-xl bg-amber-500 hover:bg-amber-600 py-3.5 text-sm font-bold text-white transition-colors mt-3 disabled:opacity-60 flex items-center justify-center gap-2">
               <KeyRound className="h-4 w-4" />
               {loading ? 'Please wait...' : isRegister ? 'Create Account' : 'Sign In'}
             </button>

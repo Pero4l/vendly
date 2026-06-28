@@ -608,3 +608,26 @@ export function getUser() {
 export function removeUser() {
   if (typeof window !== 'undefined') localStorage.removeItem('vendly_user');
 }
+
+// Normalise product images — backend stores [{url}], old seed used [{imageUrl}]
+export function getProductImage(images: any, fallback = ''): string {
+  if (!images) return fallback;
+  const arr = Array.isArray(images) ? images : [images];
+  if (arr.length === 0) return fallback;
+  return arr[0]?.url || arr[0]?.imageUrl || fallback;
+}
+
+// Upload a file to /uploads and return the public URL
+export async function uploadFile(file: File): Promise<string> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('vendly_token') : null;
+  const form = new FormData();
+  form.append('image', file);
+  const res = await fetch(`${BASE_URL}/uploads`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || 'Upload failed');
+  return data.url;
+}

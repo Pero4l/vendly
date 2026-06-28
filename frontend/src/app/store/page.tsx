@@ -1,508 +1,578 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from '../../components/Header';
-import { apiRequest } from '../../utils/api';
-import { Store, PlusCircle, ShoppingBag, CheckCircle, Package, Truck, ArrowRight, ShieldCheck, RefreshCw, AlertTriangle, Coins, Sparkles, Inbox } from 'lucide-react';
+import { apiRequest, uploadFile, getProductImage } from '../../utils/api';
+import {
+  Store, PlusCircle, Package, ShoppingBag, Settings, RefreshCw, Upload,
+  Camera, Edit2, Trash2, CheckCircle, AlertTriangle, Truck, XCircle,
+  ArrowLeft, Eye, Clock, ShieldCheck, DollarSign
+} from 'lucide-react';
+import Link from 'next/link';
 
-export default function StoreManagement() {
+type Tab = 'products' | 'orders' | 'settings';
+
+const ORDER_STATUS_META: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  pending:    { label: 'Pending',    color: 'bg-yellow-100 text-yellow-700 border-yellow-200',    icon: <Clock className="h-3 w-3" /> },
+  paid:       { label: 'Paid',       color: 'bg-blue-100 text-blue-700 border-blue-200',          icon: <ShieldCheck className="h-3 w-3" /> },
+  processing: { label: 'Processing', color: 'bg-indigo-100 text-indigo-700 border-indigo-200',    icon: <RefreshCw className="h-3 w-3" /> },
+  shipped:    { label: 'Shipped',    color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: <Truck className="h-3 w-3" /> },
+  delivered:  { label: 'Delivered',  color: 'bg-emerald-200 text-emerald-800 border-emerald-300', icon: <CheckCircle className="h-3 w-3" /> },
+  cancelled:  { label: 'Cancelled',  color: 'bg-neutral-100 text-neutral-500 border-neutral-200', icon: <XCircle className="h-3 w-3" /> },
+  disputed:   { label: 'Disputed',   color: 'bg-rose-100 text-rose-600 border-rose-200',          icon: <AlertTriangle className="h-3 w-3" /> },
+};
+
+export default function StorePage() {
   const [store, setStore] = useState<any>(null);
-  const [products, setProducts] = useState<any[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Registration Fields
+  const [tab, setTab] = useState<Tab>('products');
+
+  // Store registration
   const [storeName, setStoreName] = useState('');
   const [storeDesc, setStoreDesc] = useState('');
-  
-  // Product Creation Fields
+  const [storeLogoFile, setStoreLogoFile] = useState<File | null>(null);
+  const [storeLogoPreview, setStoreLogoPreview] = useState('');
+  const [applyLoading, setApplyLoading] = useState(false);
+  const [applyError, setApplyError] = useState('');
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // Products
+  const [products, setProducts] = useState<any[]>([]);
+  const [productLoading, setProductLoading] = useState(false);
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [categories, setCategories] = useState<any[]>([]);
+
+  // Product form
   const [pTitle, setPTitle] = useState('');
   const [pDesc, setPDesc] = useState('');
   const [pPrice, setPPrice] = useState('');
-  const [pQty, setPQty] = useState(1);
-  const [pCatId, setPCatId] = useState('1'); 
-  const [pImg, setPImg] = useState('');
+  const [pQty, setPQty] = useState('1');
+  const [pCatId, setPCatId] = useState('');
+  const [pImgFile, setPImgFile] = useState<File | null>(null);
+  const [pImgPreview, setPImgPreview] = useState('');
+  const [pImgUrl, setPImgUrl] = useState('');
+  const [pSaving, setPSaving] = useState(false);
+  const [pError, setPError] = useState('');
+  const imgInputRef = useRef<HTMLInputElement>(null);
 
-  // Shipping details state
-  const [carrier, setCarrier] = useState<Record<string, string>>({});
-  const [tracking, setTracking] = useState<Record<string, string>>({});
-  const [submittingShipment, setSubmittingShipment] = useState<Record<string, boolean>>({});
+  // Orders
+  const [orders, setOrders] = useState<any[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [updatingOrder, setUpdatingOrder] = useState<string | null>(null);
 
-  const fetchStoreInfo = async () => {
-    try {
-      const res = await apiRequest('/stores/my-store');
-      if (res.success && res.data) {
-        setStore(res.data);
-        await fetchProducts(res.data.id);
-        await fetchStoreOrders();
-      }
-    } catch (err) {
-      setStore(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Store settings edit
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsMsg, setSettingsMsg] = useState('');
 
-  const fetchProducts = async (storeId: string) => {
-    try {
-      const res = await apiRequest(`/products?storeId=${storeId}`);
-      if (res.success) {
-        setProducts(res.data);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  useEffect(() => { loadAll(); }, []);
 
-  const fetchStoreOrders = async () => {
-    try {
-      const res = await apiRequest('/orders');
-      if (res.success) {
-        setOrders(res.data);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    fetchStoreInfo();
-  }, []);
-
-  const handleRegisterStore = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const loadAll = async () => {
     setLoading(true);
     try {
-      const res = await apiRequest('/stores', {
-        method: 'POST',
-        body: JSON.stringify({ name: storeName, description: storeDesc })
-      });
+      const res = await apiRequest('/stores/my-store');
       if (res.success) {
         setStore(res.data);
-        alert('Store profile created! Awaiting platform approval (you can auto-approve using Admin Test Switcher).');
+        setEditName(res.data.name || '');
+        setEditDesc(res.data.description || '');
+        await Promise.all([loadProducts(res.data.id), loadOrders(), loadCategories()]);
       }
-    } catch (err: any) {
-      alert(`Store registration failed: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
+    } catch { setStore(null); }
+    finally { setLoading(false); }
   };
 
-  const handleCreateProduct = async (e: React.FormEvent) => {
+  const loadProducts = async (storeId: string) => {
+    setProductLoading(true);
+    try {
+      const res = await apiRequest(`/products?storeId=${storeId}`);
+      if (res.success) setProducts(res.data);
+    } catch {} finally { setProductLoading(false); }
+  };
+
+  const loadOrders = async () => {
+    setOrdersLoading(true);
+    try {
+      const res = await apiRequest('/orders');
+      if (res.success) setOrders(res.data);
+    } catch {} finally { setOrdersLoading(false); }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const res = await apiRequest('/categories');
+      if (res.success && res.data.length > 0) {
+        setCategories(res.data);
+        setPCatId(res.data[0].id);
+      }
+    } catch {}
+  };
+
+  const handleApplyVendor = async (e: React.FormEvent) => {
     e.preventDefault();
+    setApplyLoading(true); setApplyError('');
     try {
-      const res = await apiRequest('/products', {
+      let logoUrl = '';
+      if (storeLogoFile) logoUrl = await uploadFile(storeLogoFile);
+      const res = await apiRequest('/stores', {
         method: 'POST',
-        body: JSON.stringify({
-          title: pTitle,
-          description: pDesc,
-          price: pPrice,
-          quantity: pQty,
-          categoryId: pCatId,
-          images: pImg ? [pImg] : []
-        })
+        body: JSON.stringify({ name: storeName, description: storeDesc, ...(logoUrl ? { logo: logoUrl } : {}) })
       });
-
-      if (res.success) {
-        alert('Listing published successfully!');
-        setPTitle('');
-        setPDesc('');
-        setPPrice('');
-        setPQty(1);
-        setPImg('');
-        if (store) fetchProducts(store.id);
-      }
-    } catch (err: any) {
-      alert(`Product creation failed: ${err.message}`);
-    }
+      if (res.success) { await loadAll(); }
+    } catch (err: any) { setApplyError(err.message || 'Failed to create store'); }
+    finally { setApplyLoading(false); }
   };
 
-  const handleShipOrder = async (orderId: string) => {
-    const shipCarrier = carrier[orderId] || 'FedEx Express';
-    const shipTracking = tracking[orderId] || 'TRK-' + Math.random().toString().substr(2, 9).toUpperCase();
-    
-    setSubmittingShipment(prev => ({ ...prev, [orderId]: true }));
+  const openAddProduct = () => {
+    setEditingProduct(null);
+    setPTitle(''); setPDesc(''); setPPrice(''); setPQty('1'); setPImgFile(null); setPImgPreview(''); setPImgUrl(''); setPError('');
+    if (categories.length > 0) setPCatId(categories[0].id);
+    setShowAddProduct(true);
+  };
 
+  const openEditProduct = (p: any) => {
+    setEditingProduct(p);
+    setPTitle(p.title || ''); setPDesc(p.description || ''); setPPrice(String(p.price || '')); setPQty(String(p.quantity || '0'));
+    setPCatId(p.categoryId || (categories[0]?.id || ''));
+    const existingImg = getProductImage(p.images);
+    setPImgPreview(existingImg); setPImgUrl(existingImg); setPImgFile(null); setPError('');
+    setShowAddProduct(true);
+  };
+
+  const handleProductImgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPImgFile(file);
+    setPImgPreview(URL.createObjectURL(file));
+  };
+
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pTitle || !pPrice) { setPError('Title and price are required'); return; }
+    setPSaving(true); setPError('');
     try {
-      // Direct simulation helper inside local storage mock db
-      const dbStr = localStorage.getItem('vendly_mock_db');
-      if (dbStr) {
-        const db = JSON.parse(dbStr);
-        const order = db.orders.find((o: any) => o.id === orderId);
-        if (order) {
-          order.status = 'SHIPPED';
-          order.carrier = shipCarrier;
-          order.trackingNumber = shipTracking;
-          
-          // Add system log alerts
-          db.notifications.unshift({
-            id: 'n' + (db.notifications.length + 1),
-            userId: order.userId,
-            message: `Seller dispatched order ${order.id} via ${shipCarrier} (Tracking: ${shipTracking}). 20% milestone released!`,
-            createdAt: new Date().toISOString()
-          });
+      let imageUrl = pImgUrl;
+      if (pImgFile) imageUrl = await uploadFile(pImgFile);
 
-          const sellerStore = db.stores.find((s: any) => s.id === order.storeId);
-          if (sellerStore) {
-            db.notifications.unshift({
-              id: 'n' + (db.notifications.length + 1),
-              userId: sellerStore.userId,
-              message: `Fulfillment confirmed for order ${order.id}. 20% shipment payout processed.`,
-              createdAt: new Date().toISOString()
-            });
-          }
+      const body = {
+        title: pTitle, description: pDesc, price: pPrice,
+        quantity: parseInt(pQty) || 0, categoryId: pCatId,
+        ...(imageUrl ? { images: [{ url: imageUrl }] } : {})
+      };
 
-          localStorage.setItem('vendly_mock_db', JSON.stringify(db));
-        }
+      if (editingProduct) {
+        await apiRequest(`/products/${editingProduct.id}`, { method: 'PUT', body: JSON.stringify(body) });
+      } else {
+        await apiRequest('/products', { method: 'POST', body: JSON.stringify(body) });
       }
+      setShowAddProduct(false);
+      if (store) await loadProducts(store.id);
+    } catch (err: any) { setPError(err.message || 'Failed to save product'); }
+    finally { setPSaving(false); }
+  };
 
-      await new Promise(r => setTimeout(r, 1000));
-      alert(`Fulfillment confirmed. Order ${orderId} status set to SHIPPED! 20% payout released.`);
-      await fetchStoreOrders();
-    } catch (err: any) {
-      alert(`Shipment dispatch failed: ${err.message}`);
-    } finally {
-      setSubmittingShipment(prev => ({ ...prev, [orderId]: false }));
-    }
+  const handleDeleteProduct = async (id: string) => {
+    if (!confirm('Delete this product?')) return;
+    try {
+      await apiRequest(`/products/${id}`, { method: 'DELETE' });
+      setProducts(prev => prev.filter(p => p.id !== id));
+    } catch (err: any) { alert(err.message); }
+  };
+
+  const handleOrderStatus = async (orderId: string, status: string) => {
+    setUpdatingOrder(orderId);
+    try {
+      await apiRequest(`/orders/${orderId}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    } catch (err: any) { alert(err.message); }
+    finally { setUpdatingOrder(null); }
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSettingsSaving(true); setSettingsMsg('');
+    try {
+      await apiRequest('/stores/my-store', { method: 'PUT', body: JSON.stringify({ name: editName, description: editDesc }) });
+      setStore((s: any) => ({ ...s, name: editName, description: editDesc }));
+      setSettingsMsg('Settings saved!');
+      setTimeout(() => setSettingsMsg(''), 3000);
+    } catch (err: any) { setSettingsMsg(err.message || 'Failed to save'); }
+    finally { setSettingsSaving(false); }
   };
 
   if (loading) {
     return (
-      <div className="flex flex-col min-h-screen bg-white text-neutral-900">
-        <Header />
-        <div className="flex-1 flex flex-col items-center justify-center space-y-4">
-          <RefreshCw className="h-8 w-8 animate-spin text-amber-500" />
-          <p className="text-xs text-neutral-500 font-semibold">Loading storefront metrics...</p>
+      <div className="min-h-screen bg-stone-50">
+        <div className="hidden md:block"><Header /></div>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <RefreshCw className="h-6 w-6 animate-spin text-amber-500" />
         </div>
       </div>
     );
   }
 
-  // Calculate stats
-  const totalStock = products.reduce((acc, p) => acc + (p.quantity || 0), 0);
-  const totalValue = products.reduce((acc, p) => acc + (parseFloat(p.price) * (p.quantity || 0)), 0).toFixed(2);
-  const pendingOrdersCount = orders.filter(o => o.status === 'PAID').length;
-
-  return (
-    <div className="flex flex-col min-h-screen bg-white text-neutral-900">
-      <Header />
-
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 flex-1 space-y-8">
-        
-        {!store ? (
-          /* Store Registration flow */
-          <section className="mx-auto max-w-md rounded-2xl border border-neutral-250 bg-neutral-50 p-6 md:p-8 space-y-6">
-            <div className="text-center space-y-2">
-              <Store className="h-10 w-10 text-amber-500 mx-auto" />
-              <h2 className="text-xl font-black text-neutral-900">Open Your Merchant Center</h2>
-              <p className="text-xs text-neutral-500 leading-relaxed">
-                Unlock seller tools, upload physical/digital goods, and receive protected escrow payments on Celo.
-              </p>
+  /* ── NO STORE ── Apply form */
+  if (!store) {
+    return (
+      <div className="min-h-screen bg-stone-50">
+        <div className="hidden md:block"><Header /></div>
+        <div className="max-w-lg mx-auto px-4 pt-8 pb-32">
+          <Link href="/" className="inline-flex items-center gap-1.5 text-sm font-bold text-neutral-500 hover:text-neutral-900 mb-6">
+            <ArrowLeft className="h-4 w-4" /> Back
+          </Link>
+          <div className="bg-white rounded-2xl border border-neutral-100 p-8">
+            <div className="text-center mb-8">
+              <div className="h-14 w-14 rounded-2xl bg-amber-100 flex items-center justify-center mx-auto mb-4">
+                <Store className="h-7 w-7 text-amber-600" />
+              </div>
+              <h1 className="text-xl font-black text-neutral-900">Open Your Store</h1>
+              <p className="text-sm text-neutral-500 mt-1">Create your vendor storefront and start selling in minutes.</p>
             </div>
 
-            <form onSubmit={handleRegisterStore} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Store Brand Name</label>
-                <input 
-                  type="text" 
-                  required 
-                  placeholder="e.g. Celo Alpha Emporium"
-                  value={storeName}
-                  onChange={e => setStoreName(e.target.value)}
-                  className="mt-1.5 w-full rounded-lg border border-neutral-350 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" 
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Store Description</label>
-                <textarea 
-                  required 
-                  placeholder="Describe your listings, warranty terms, and shipping guarantees..."
-                  value={storeDesc}
-                  onChange={e => setStoreDesc(e.target.value)}
-                  rows={3}
-                  className="mt-1.5 w-full rounded-lg border border-neutral-350 bg-white px-3.5 py-2 text-xs text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" 
-                />
+            {applyError && <div className="mb-4 rounded-xl bg-rose-50 border border-rose-200 p-3.5 text-sm text-rose-600">{applyError}</div>}
+
+            <form onSubmit={handleApplyVendor} className="space-y-4">
+              <div className="flex flex-col items-center gap-3">
+                <button type="button" onClick={() => logoInputRef.current?.click()}
+                  className="h-20 w-20 rounded-2xl border-2 border-dashed border-neutral-300 hover:border-amber-400 transition-colors flex items-center justify-center overflow-hidden bg-neutral-50">
+                  {storeLogoPreview
+                    ? <img src={storeLogoPreview} alt="logo" className="h-full w-full object-cover" />
+                    : <Camera className="h-7 w-7 text-neutral-300" />}
+                </button>
+                <span className="text-xs text-neutral-400">Store logo (optional)</span>
+                <input ref={logoInputRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) { setStoreLogoFile(f); setStoreLogoPreview(URL.createObjectURL(f)); } }} />
               </div>
 
-              <button 
-                type="submit"
-                className="w-full rounded-lg bg-amber-500 hover:bg-amber-600 py-3 text-sm font-bold text-white transition-colors cursor-pointer"
-              >
-                Register Storefront
+              <div>
+                <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1.5">Store Name *</label>
+                <input required value={storeName} onChange={e => setStoreName(e.target.value)} placeholder="e.g. Tech Bazaar"
+                  className="w-full rounded-xl border border-neutral-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1.5">Description</label>
+                <textarea value={storeDesc} onChange={e => setStoreDesc(e.target.value)} rows={3} placeholder="Tell buyers what you sell..."
+                  className="w-full rounded-xl border border-neutral-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none" />
+              </div>
+              <button type="submit" disabled={applyLoading}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 py-3.5 text-sm font-bold text-white transition-colors disabled:opacity-60">
+                {applyLoading
+                  ? <><RefreshCw className="h-4 w-4 animate-spin" /> Creating...</>
+                  : <><Store className="h-4 w-4" /> Create My Store</>}
               </button>
             </form>
-          </section>
-        ) : (
-          /* Main Merchant dashboard layout */
-          <div className="space-y-8">
-            
-            {/* Header profile & alerts */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-neutral-200 pb-6">
-              <div className="space-y-1">
-                <h1 className="text-2xl font-black text-neutral-950 flex items-center gap-2">
-                  <Store className="h-6 w-6 text-amber-500" />
-                  {store.name} Merchant Hub
-                </h1>
-                <p className="text-xs text-neutral-500">
-                  Manage your on-chain store assets, publish inventory, and fulfill paid client orders.
-                </p>
-              </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-              <div className="flex items-center gap-2">
-                <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${
-                  store.isApproved ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
-                }`}>
-                  <CheckCircle className="h-3.5 w-3.5" />
-                  {store.isApproved ? 'Approved Merchant' : 'Awaiting Approval'}
-                </span>
+  /* ── HAS STORE ── Seller dashboard */
+  const pendingOrders = orders.filter(o => o.status === 'pending' || o.status === 'paid');
+  const totalRevenue = orders
+    .filter(o => ['delivered', 'completed'].includes(o.status))
+    .reduce((s, o) => s + parseFloat(o.totalAmount || 0), 0);
+
+  return (
+    <div className="min-h-screen bg-stone-50">
+      <div className="hidden md:block"><Header /></div>
+
+      <div className="max-w-3xl mx-auto px-4 pt-6 pb-32">
+        {/* Store header card */}
+        <div className="bg-white rounded-2xl border border-neutral-100 p-5 mb-4">
+          <div className="flex items-center gap-4">
+            {store.logo?.url
+              ? <img src={store.logo.url} alt="logo" className="h-14 w-14 rounded-xl object-cover" />
+              : <div className="h-14 w-14 rounded-xl bg-amber-100 flex items-center justify-center"><Store className="h-7 w-7 text-amber-600" /></div>}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg font-black text-neutral-900 truncate">{store.name}</h1>
+                <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full uppercase">{store.status}</span>
               </div>
+              <p className="text-xs text-neutral-400 truncate">{store.description || 'No description set'}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3 mt-4">
+            <div className="bg-neutral-50 rounded-xl p-3 text-center">
+              <p className="text-lg font-black text-amber-600">{products.length}</p>
+              <p className="text-[10px] text-neutral-500 font-medium">Products</p>
+            </div>
+            <div className="bg-neutral-50 rounded-xl p-3 text-center">
+              <p className="text-lg font-black text-blue-600">{pendingOrders.length}</p>
+              <p className="text-[10px] text-neutral-500 font-medium">New Orders</p>
+            </div>
+            <div className="bg-neutral-50 rounded-xl p-3 text-center">
+              <p className="text-lg font-black text-emerald-600">{totalRevenue.toFixed(2)}</p>
+              <p className="text-[10px] text-neutral-500 font-medium">CELO Earned</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex bg-white rounded-xl border border-neutral-100 p-1 mb-4">
+          {(['products', 'orders', 'settings'] as Tab[]).map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg capitalize transition-colors ${tab === t ? 'bg-amber-500 text-white' : 'text-neutral-500 hover:text-neutral-800'}`}>
+              {t === 'orders' && pendingOrders.length > 0 ? `Orders (${pendingOrders.length})` : t.charAt(0).toUpperCase() + t.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* ── PRODUCTS TAB ── */}
+        {tab === 'products' && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-neutral-700">{products.length} Products</h2>
+              <button onClick={openAddProduct}
+                className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition-colors">
+                <PlusCircle className="h-3.5 w-3.5" /> Add Product
+              </button>
             </div>
 
-            {/* Seller Central Metrics Row */}
-            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="border border-neutral-200 rounded-xl p-5 bg-neutral-50 space-y-1.5">
-                <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Total Items Listed</span>
-                <span className="text-2xl font-black text-neutral-900 block">{products.length} Products</span>
-              </div>
-              <div className="border border-neutral-200 rounded-xl p-5 bg-neutral-50 space-y-1.5">
-                <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Total Catalog Stock</span>
-                <span className="text-2xl font-black text-neutral-900 block">{totalStock} Units</span>
-              </div>
-              <div className="border border-neutral-200 rounded-xl p-5 bg-neutral-50 space-y-1.5">
-                <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Assets Valuation</span>
-                <span className="text-2xl font-black text-neutral-900 block">{totalValue} CELO</span>
-              </div>
-              <div className="border border-neutral-200 rounded-xl p-5 bg-amber-500/10 border-amber-500/20 space-y-1.5">
-                <span className="text-[10px] text-amber-800 font-extrabold uppercase tracking-wider block">Pending Shipments</span>
-                <span className="text-2xl font-black text-amber-800 block">{pendingOrdersCount} Fulfillments</span>
-              </div>
-            </section>
-
-            {/* Split: Left Uploader | Right Catalog & Orders */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              
-              {/* LEFT: Product Creator Form */}
-              <div className="lg:col-span-4 border border-neutral-200 rounded-xl bg-white p-6 space-y-6">
-                <h3 className="text-sm font-bold text-neutral-905 uppercase tracking-wider flex items-center gap-1.5">
-                  <PlusCircle className="h-4.5 w-4.5 text-amber-500" />
-                  List New Product
-                </h3>
-
-                <form onSubmit={handleCreateProduct} className="space-y-4 text-neutral-805">
-                  <div>
-                    <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Product Name</label>
-                    <input 
-                      type="text" 
-                      required 
-                      placeholder="e.g. Ledger Hardware Key"
-                      value={pTitle}
-                      onChange={e => setPTitle(e.target.value)}
-                      className="mt-1.5 w-full rounded-lg border border-neutral-350 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Description</label>
-                    <textarea 
-                      required 
-                      placeholder="Upload product details, specs, and redeem instructions..."
-                      value={pDesc}
-                      onChange={e => setPDesc(e.target.value)}
-                      rows={3}
-                      className="mt-1.5 w-full rounded-lg border border-neutral-350 bg-white px-3.5 py-2 text-xs text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" 
-                    />
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="w-1/2">
-                      <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Price (CELO)</label>
-                      <input 
-                        type="text" 
-                        required 
-                        placeholder="1.5"
-                        value={pPrice}
-                        onChange={e => setPPrice(e.target.value)}
-                        className="mt-1.5 w-full rounded-lg border border-neutral-350 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" 
-                      />
-                    </div>
-                    <div className="w-1/2">
-                      <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Stock Qty</label>
-                      <input 
-                        type="number" 
-                        required 
-                        min={1}
-                        value={pQty}
-                        onChange={e => setPQty(parseInt(e.target.value))}
-                        className="mt-1.5 w-full rounded-lg border border-neutral-350 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" 
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Category Department</label>
-                    <select 
-                      value={pCatId}
-                      onChange={e => setPCatId(e.target.value)}
-                      className="mt-1.5 w-full rounded-lg border border-neutral-355 bg-white px-3.5 py-2 text-xs text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 cursor-pointer"
-                    >
-                      <option value="1">Electronics</option>
-                      <option value="2">Digital Services</option>
-                      <option value="3">Apparel</option>
-                      <option value="4">Home & Kitchen</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">Product Display Image URL</label>
-                    <input 
-                      type="url" 
-                      placeholder="https://images.unsplash.com/photo-..."
-                      value={pImg}
-                      onChange={e => setPImg(e.target.value)}
-                      className="mt-1.5 w-full rounded-lg border border-neutral-350 bg-white px-3.5 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                    />
-                  </div>
-
-                  <button 
-                    type="submit"
-                    disabled={!store.isApproved}
-                    className="w-full rounded-lg bg-amber-500 hover:bg-amber-600 py-3 text-xs font-bold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    {!store.isApproved ? 'Awaiting Moderator Approval' : 'Publish to Marketplace'}
+            {showAddProduct && (
+              <div className="bg-white rounded-2xl border border-amber-200 p-5 mb-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-black text-neutral-900">{editingProduct ? 'Edit Product' : 'New Product'}</h3>
+                  <button onClick={() => setShowAddProduct(false)} className="text-neutral-400 hover:text-neutral-700">
+                    <XCircle className="h-5 w-5" />
                   </button>
+                </div>
+
+                {pError && <div className="mb-3 rounded-lg bg-rose-50 border border-rose-200 p-3 text-xs text-rose-600">{pError}</div>}
+
+                <form onSubmit={handleSaveProduct} className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1.5">Product Image</label>
+                    <div className="flex items-center gap-3">
+                      <button type="button" onClick={() => imgInputRef.current?.click()}
+                        className="h-20 w-20 rounded-xl border-2 border-dashed border-neutral-300 hover:border-amber-400 transition-colors flex items-center justify-center overflow-hidden bg-neutral-50 flex-shrink-0">
+                        {pImgPreview
+                          ? <img src={pImgPreview} alt="" className="h-full w-full object-cover" />
+                          : <Camera className="h-6 w-6 text-neutral-300" />}
+                      </button>
+                      <div className="flex-1">
+                        <button type="button" onClick={() => imgInputRef.current?.click()}
+                          className="flex items-center gap-1.5 text-xs font-bold text-amber-600 hover:underline">
+                          <Upload className="h-3.5 w-3.5" /> {pImgPreview ? 'Change Image' : 'Upload Image'}
+                        </button>
+                        <p className="text-[10px] text-neutral-400 mt-1">JPEG, PNG or WebP • Max 5 MB</p>
+                        {!pImgFile && (
+                          <input value={pImgUrl} onChange={e => { setPImgUrl(e.target.value); setPImgPreview(e.target.value); }}
+                            placeholder="Or paste image URL..."
+                            className="mt-2 w-full border border-neutral-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                        )}
+                      </div>
+                      <input ref={imgInputRef} type="file" accept="image/*" className="hidden" onChange={handleProductImgChange} />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Title *</label>
+                      <input required value={pTitle} onChange={e => setPTitle(e.target.value)} placeholder="Product name"
+                        className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Price (CELO) *</label>
+                      <input required type="number" step="0.0001" min="0" value={pPrice} onChange={e => setPPrice(e.target.value)} placeholder="0.00"
+                        className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Quantity</label>
+                      <input type="number" min="0" value={pQty} onChange={e => setPQty(e.target.value)} placeholder="10"
+                        className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                    </div>
+                    {categories.length > 0 && (
+                      <div className="col-span-2">
+                        <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Category</label>
+                        <select value={pCatId} onChange={e => setPCatId(e.target.value)}
+                          className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white">
+                          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    <div className="col-span-2">
+                      <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Description</label>
+                      <textarea value={pDesc} onChange={e => setPDesc(e.target.value)} rows={3} placeholder="Describe your product..."
+                        className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none" />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button type="submit" disabled={pSaving}
+                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 py-2.5 text-sm font-bold text-white transition-colors disabled:opacity-60">
+                      {pSaving
+                        ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Saving...</>
+                        : <><CheckCircle className="h-3.5 w-3.5" /> {editingProduct ? 'Update' : 'Publish'}</>}
+                    </button>
+                    <button type="button" onClick={() => setShowAddProduct(false)}
+                      className="px-4 rounded-xl border border-neutral-200 text-sm font-bold text-neutral-600 hover:bg-neutral-50">
+                      Cancel
+                    </button>
+                  </div>
                 </form>
               </div>
+            )}
 
-              {/* RIGHT: Inventory Lists & Order Fulfillment Section */}
-              <div className="lg:col-span-8 space-y-8">
-                
-                {/* 1. Order Shipment Fulfillment Panel */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-bold text-neutral-950 uppercase tracking-wider flex items-center gap-2">
-                    <Truck className="h-4.5 w-4.5 text-amber-500" />
-                    Pending Buyer Shipments & Deliveries
-                  </h3>
-
-                  {orders.length === 0 || !orders.some(o => o.status === 'PAID') ? (
-                    <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-6 text-center text-neutral-450">
-                      <Inbox className="mx-auto h-8 w-8 text-neutral-300 mb-2" />
-                      <p className="text-xs font-bold text-neutral-600">No active pending orders requiring shipping.</p>
-                      <p className="text-[10px] text-neutral-450 mt-0.5">When buyers purchase your items via escrow, they will appear here for logistics fulfillment.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {orders.filter(o => o.status === 'PAID').map((order: any) => {
-                        const item = order.items?.[0];
-                        return (
-                          <div key={order.id} className="border border-amber-300 rounded-xl bg-amber-50/20 p-5 space-y-4 shadow-xs">
-                            
-                            {/* Order mini-header */}
-                            <div className="flex justify-between items-start border-b border-neutral-100 pb-2">
-                              <div>
-                                <span className="text-[10px] text-neutral-400 font-mono">ORDER: {order.id}</span>
-                                <h4 className="text-xs font-bold text-neutral-800">Buyer: {order.user?.name} ({order.user?.email})</h4>
-                              </div>
-                              <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-black px-2 py-0.5 rounded">
-                                ESCROW LOCKED (30%)
-                              </span>
-                            </div>
-
-                            {/* Item details */}
-                            <div className="text-xs text-neutral-600">
-                              <p>Item: <b>{item?.product?.title}</b> (x{item?.quantity})</p>
-                              <p>Shipping Destination: <span className="font-mono text-neutral-800 bg-neutral-100 px-1 py-0.5 rounded">{order.shippingAddress}</span></p>
-                            </div>
-
-                            {/* Dispatch input */}
-                            <div className="bg-white border border-neutral-200 rounded-lg p-4 space-y-3">
-                              <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">Confirm Parcel Dispatch</span>
-                              
-                              <div className="flex flex-col sm:flex-row gap-3">
-                                <input 
-                                  type="text" 
-                                  placeholder="Logistics Carrier (e.g. FedEx, DHL)" 
-                                  value={carrier[order.id] || ''}
-                                  onChange={e => setCarrier(prev => ({ ...prev, [order.id]: e.target.value }))}
-                                  className="flex-1 rounded border border-neutral-300 bg-white px-3 py-1.5 text-xs text-neutral-900 focus:outline-none"
-                                />
-                                <input 
-                                  type="text" 
-                                  placeholder="Tracking Code / Airbill" 
-                                  value={tracking[order.id] || ''}
-                                  onChange={e => setTracking(prev => ({ ...prev, [order.id]: e.target.value }))}
-                                  className="flex-1 rounded border border-neutral-300 bg-white px-3 py-1.5 text-xs text-neutral-900 focus:outline-none"
-                                />
-                              </div>
-
-                              <button
-                                onClick={() => handleShipOrder(order.id)}
-                                disabled={submittingShipment[order.id]}
-                                className="rounded bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-4 py-2 flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
-                              >
-                                <Package className="h-3.5 w-3.5" />
-                                {submittingShipment[order.id] ? 'Updating...' : 'Ship Package & Release Stage 2 (20%)'}
-                              </button>
-                            </div>
-
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. Active Store Inventory Catalog */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-bold text-neutral-950 uppercase tracking-wider flex items-center gap-2">
-                    <ShoppingBag className="h-4.5 w-4.5 text-amber-500" />
-                    Listed Store Catalog Inventory
-                  </h3>
-
-                  {products.length === 0 ? (
-                    <div className="rounded-xl border border-neutral-200 p-8 text-center text-neutral-500">
-                      <p className="text-xs font-semibold">No catalog items listed yet.</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {products.map((p: any) => {
-                        const img = p.images?.[0]?.imageUrl || 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&q=80&w=400';
-                        return (
-                          <div key={p.id} className="rounded-xl border border-neutral-200 bg-white overflow-hidden flex flex-col justify-between hover:shadow-xs transition-shadow">
-                            <div className="h-28 bg-neutral-100 relative">
-                              <img src={img} alt={p.title} className="w-full h-full object-cover" />
-                              <span className="absolute top-2 right-2 rounded bg-neutral-900/90 px-2 py-0.5 text-xs font-black text-amber-400">
-                                {p.price} CELO
-                              </span>
-                            </div>
-                            <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-                              <h4 className="font-extrabold text-xs text-neutral-900 line-clamp-1">{p.title}</h4>
-                              
-                              <div className="flex justify-between items-center text-[10px] text-neutral-500 pt-2 border-t border-neutral-100">
-                                <div>
-                                  <span>Stock: </span>
-                                  {p.quantity <= 3 ? (
-                                    <span className="text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                                      <AlertTriangle className="h-3 w-3" />
-                                      Low! ({p.quantity})
-                                    </span>
-                                  ) : (
-                                    <span className="font-bold text-neutral-700">{p.quantity} units</span>
-                                  )}
-                                </div>
-                                <span className="font-mono text-neutral-400">ID: {p.id}</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
+            {productLoading ? (
+              <div className="flex justify-center py-10"><RefreshCw className="h-5 w-5 animate-spin text-amber-500" /></div>
+            ) : products.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-neutral-100 p-10 text-center space-y-3">
+                <ShoppingBag className="h-10 w-10 text-neutral-200 mx-auto" />
+                <p className="text-sm font-bold text-neutral-600">No products yet</p>
+                <button onClick={openAddProduct} className="text-xs font-bold text-amber-600 hover:underline">+ Add your first product</button>
               </div>
-
-            </div>
-
+            ) : (
+              <div className="space-y-2">
+                {products.map(p => {
+                  const img = getProductImage(p.images, '');
+                  return (
+                    <div key={p.id} className="bg-white rounded-2xl border border-neutral-100 p-4 flex gap-4 items-center">
+                      <div className="h-14 w-14 rounded-xl overflow-hidden bg-neutral-100 flex-shrink-0">
+                        {img
+                          ? <img src={img} alt="" className="h-full w-full object-cover" />
+                          : <div className="h-full w-full bg-gradient-to-br from-amber-100 to-amber-200" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-neutral-900 truncate">{p.title}</p>
+                        <p className="text-xs font-black text-amber-600">{p.price} CELO</p>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${p.quantity > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}>
+                          {p.quantity > 0 ? `${p.quantity} in stock` : 'Out of stock'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Link href={`/products/${p.id}`}
+                          className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-neutral-100 transition-colors text-neutral-400">
+                          <Eye className="h-4 w-4" />
+                        </Link>
+                        <button onClick={() => openEditProduct(p)}
+                          className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-amber-50 transition-colors text-amber-500">
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => handleDeleteProduct(p.id)}
+                          className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-rose-50 transition-colors text-rose-400">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
-      </main>
+        {/* ── ORDERS TAB ── */}
+        {tab === 'orders' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-neutral-700">{orders.length} Total Orders</h2>
+              <button onClick={loadOrders} className="text-xs text-neutral-400 hover:text-neutral-700 flex items-center gap-1">
+                <RefreshCw className="h-3 w-3" /> Refresh
+              </button>
+            </div>
+
+            {ordersLoading ? (
+              <div className="flex justify-center py-10"><RefreshCw className="h-5 w-5 animate-spin text-amber-500" /></div>
+            ) : orders.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-neutral-100 p-10 text-center space-y-3">
+                <Package className="h-10 w-10 text-neutral-200 mx-auto" />
+                <p className="text-sm font-bold text-neutral-600">No orders yet</p>
+                <p className="text-xs text-neutral-400">Orders will appear here when buyers purchase your products.</p>
+              </div>
+            ) : (
+              orders.map(order => {
+                const meta = ORDER_STATUS_META[order.status] || ORDER_STATUS_META['pending'];
+                const firstItem = order.items?.[0];
+                const productImg = getProductImage(firstItem?.product?.images, '');
+                const buyer = order.buyer;
+                return (
+                  <div key={order.id} className="bg-white rounded-2xl border border-neutral-100 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="h-12 w-12 rounded-xl bg-neutral-100 overflow-hidden flex-shrink-0">
+                        {productImg
+                          ? <img src={productImg} alt="" className="h-full w-full object-cover" />
+                          : <div className="h-full w-full bg-amber-100" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-bold text-neutral-900">#{order.orderNumber || order.id?.slice(0, 12)}</p>
+                            {buyer && <p className="text-[11px] text-neutral-400">{buyer.fullName || buyer.username} • {buyer.email}</p>}
+                          </div>
+                          <span className={`flex items-center gap-1 text-[10px] font-bold border rounded-full px-2 py-0.5 shrink-0 ${meta.color}`}>
+                            {meta.icon} {meta.label}
+                          </span>
+                        </div>
+                        <p className="text-sm font-black text-amber-600 mt-1">{order.totalAmount} CELO</p>
+                        {order.items?.length > 0 && (
+                          <p className="text-[11px] text-neutral-500 truncate">
+                            {order.items.length} item{order.items.length > 1 ? 's' : ''} • {order.items.map((i: any) => i.product?.title || 'Product').join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {(order.status === 'paid' || order.status === 'processing') && (
+                      <div className="flex gap-2 mt-3 pt-3 border-t border-neutral-50">
+                        {order.status === 'paid' && (
+                          <button onClick={() => handleOrderStatus(order.id, 'processing')} disabled={updatingOrder === order.id}
+                            className="flex-1 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold transition-colors disabled:opacity-60">
+                            Mark Processing
+                          </button>
+                        )}
+                        <button onClick={() => handleOrderStatus(order.id, 'shipped')} disabled={updatingOrder === order.id}
+                          className="flex-1 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-colors disabled:opacity-60 flex items-center justify-center gap-1">
+                          <Truck className="h-3 w-3" /> Mark Shipped
+                        </button>
+                      </div>
+                    )}
+                    {order.status === 'pending' && (
+                      <div className="mt-3 pt-3 border-t border-neutral-50">
+                        <p className="text-[11px] text-neutral-400 text-center">Awaiting buyer payment confirmation</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* ── SETTINGS TAB ── */}
+        {tab === 'settings' && (
+          <div className="bg-white rounded-2xl border border-neutral-100 p-5">
+            <h2 className="text-sm font-bold text-neutral-700 uppercase tracking-wider mb-5 flex items-center gap-2">
+              <Settings className="h-4 w-4 text-amber-500" /> Store Settings
+            </h2>
+            {settingsMsg && (
+              <div className={`mb-4 rounded-lg p-3 text-xs font-medium ${settingsMsg.includes('saved') ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-rose-50 border border-rose-200 text-rose-600'}`}>
+                {settingsMsg}
+              </div>
+            )}
+            <form onSubmit={handleSaveSettings} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1.5">Store Name</label>
+                <input value={editName} onChange={e => setEditName(e.target.value)} required
+                  className="w-full rounded-xl border border-neutral-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1.5">Description</label>
+                <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} rows={4}
+                  className="w-full rounded-xl border border-neutral-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none" />
+              </div>
+              <div className="pt-1 border-t border-neutral-100">
+                <p className="text-xs text-neutral-400">Store URL slug: <span className="font-mono font-bold text-neutral-600">{store.slug}</span></p>
+              </div>
+              <button type="submit" disabled={settingsSaving}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 py-3 text-sm font-bold text-white transition-colors disabled:opacity-60">
+                {settingsSaving ? <><RefreshCw className="h-4 w-4 animate-spin" /> Saving...</> : 'Save Settings'}
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -88,7 +88,7 @@ function MarketplaceContent() {
   };
 
   const handleAddToCart = (product: any) => {
-    const img = product.images?.[0]?.imageUrl || product.images?.[0] || '';
+    const img = product.images?.[0]?.url || product.images?.[0]?.imageUrl || (typeof product.images?.[0] === 'string' ? product.images[0] : '') || '';
     addItem({ id: product.id, title: product.title, price: String(product.price), image: img, storeId: product.storeId || '', storeName: product.store?.name || 'Vendly Store' });
     setAddedToCart(product.id);
     setTimeout(() => setAddedToCart(null), 2000);
@@ -461,7 +461,7 @@ function MarketplaceContent() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {products.map((product: any) => {
-                const img = product.images?.[0]?.imageUrl || 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&q=80&w=400';
+                const img = product.images?.[0]?.url || product.images?.[0]?.imageUrl || 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&q=80&w=400';
                 
                 // Simulate reviews score and USD estimation
                 const mockRating = product.id === 'p1' ? 4.9 : product.id === 'p2' ? 4.8 : product.id === 'p3' ? 4.7 : 4.5;

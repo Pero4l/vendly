@@ -10,6 +10,7 @@ const disputeRoutes = require('./disputeRoutes');
 const adminRoutes = require('./adminRoutes');
 const notificationRoutes = require('./notificationRoutes');
 const uploadRoutes = require('./uploadRoutes');
+const categoryRoutes = require('./categoryRoutes');
 
 router.use('/auth', authRoutes);
 router.use('/wallets', walletRoutes);
@@ -20,5 +21,6 @@ router.use('/disputes', disputeRoutes);
 router.use('/admin', adminRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/uploads', uploadRoutes);
+router.use('/categories', categoryRoutes);
 
 module.exports = router;

@@ -77,7 +77,7 @@ export default function ProductDetails() {
         method: 'POST',
         body: JSON.stringify({
           items: [{ productId: product.id, quantity }],
-          shippingAddress: '789 Sandbox Avenue, Celo Local Devnet'
+          shippingAddress: { line1: 'To be confirmed', city: 'N/A', country: 'N/A' }
         })
       });
 
@@ -143,7 +143,7 @@ export default function ProductDetails() {
     );
   }
 
-  const mainImg = product.images?.[0]?.imageUrl || 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&q=80&w=600';
+  const mainImg = product.images?.[0]?.url || product.images?.[0]?.imageUrl || 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&q=80&w=600';
   const totalCost = (parseFloat(product.price) * quantity).toFixed(4);
   const usdPrice = (parseFloat(product.price) * 0.70).toFixed(2);
   const totalUsdCost = (parseFloat(totalCost) * 0.70).toFixed(2);

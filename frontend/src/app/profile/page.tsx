@@ -112,7 +112,7 @@ export default function ProfilePage() {
       const form = new FormData();
       form.append('image', avatarFile);
       const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-      const res = await fetch(`${BASE_URL}/upload`, {
+      const res = await fetch(`${BASE_URL}/uploads`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form
