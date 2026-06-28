@@ -1,5 +1,5 @@
 const authService = require("../services/authService");
-const { User, Wallet } = require("../models");
+const { User, Wallet, Address } = require("../models");
 
 async function register(req, res, next) {
   try {
@@ -168,6 +168,13 @@ async function getProfile(req, res, next) {
           as: "wallet",
           attributes: ["address", "username", "isActive"],
         },
+        {
+          model: Address,
+          as: "addresses",
+          where: { isDefault: true },
+          required: false,
+          limit: 1
+        }
       ],
     });
 
@@ -177,7 +184,26 @@ async function getProfile(req, res, next) {
         .json({ success: false, message: "User not found" });
     }
 
-    res.status(200).json({ success: true, data: user });
+    // Flatten default address to top-level `address` field
+    const userData = user.toJSON();
+    const defaultAddr = userData.addresses?.[0];
+    if (defaultAddr) {
+      userData.address = {
+        fullName: defaultAddr.fullName,
+        phone: defaultAddr.phone,
+        line1: defaultAddr.addressLine1,
+        line2: defaultAddr.addressLine2,
+        city: defaultAddr.city,
+        state: defaultAddr.state,
+        zip: defaultAddr.postalCode,
+        country: defaultAddr.country
+      };
+    }
+    delete userData.addresses;
+    // Alias profileImage → avatar for frontend compatibility
+    if (userData.profileImage) userData.avatar = userData.profileImage;
+
+    res.status(200).json({ success: true, data: userData });
   } catch (error) {
     next(error);
   }
@@ -188,13 +214,15 @@ const getMe = getProfile;
 
 async function updateProfile(req, res, next) {
   try {
-    const { username, bio, profileImage, password, currentPassword } = req.body;
+    const { username, fullName, bio, profileImage, avatar, password, currentPassword, address } = req.body;
     const data = await authService.updateProfile(req.user.id, {
       username,
+      fullName,
       bio,
-      profileImage,
+      profileImage: avatar || profileImage,
       password,
       currentPassword,
+      address,
     });
     res
       .status(200)

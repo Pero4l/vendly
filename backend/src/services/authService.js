@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
-const { User, Wallet, sequelize } = require('../models');
+const { User, Wallet, Address, sequelize } = require('../models');
 const { JWT_SECRET } = require('../middlewares/auth');
 const { addWalletCreationJob } = require('../jobs/queue');
 const redis = require('../config/redis');
@@ -287,12 +287,19 @@ async function resetPassword(token, newPassword) {
   return { message: 'Password has been reset successfully' };
 }
 
-async function updateProfile(userId, { username, bio, profileImage, password, currentPassword }) {
+async function updateProfile(userId, { username, fullName, bio, profileImage, password, currentPassword, address }) {
   const user = await User.findByPk(userId);
   if (!user) throw new Error('User not found');
 
   const updates = {};
   const changes = [];
+
+  if (fullName !== undefined && fullName.trim() !== '') {
+    updates.fullName = fullName.trim();
+    changes.push('full name');
+  }
+
+  // Address is handled separately after user.update() below
 
   if (username !== undefined && username !== user.username) {
     if (!/^[a-z0-9_]{3,30}$/.test(username)) {
@@ -323,9 +330,37 @@ async function updateProfile(userId, { username, bio, profileImage, password, cu
     changes.push('password');
   }
 
-  if (Object.keys(updates).length === 0) throw new Error('No valid fields provided to update');
+  if (Object.keys(updates).length === 0 && password === undefined && address === undefined) throw new Error('No valid fields provided to update');
 
-  await user.update(updates);
+  if (Object.keys(updates).length > 0) await user.update(updates);
+
+  // Save delivery address to Address table
+  if (address !== undefined) {
+    const addr = typeof address === 'string' ? JSON.parse(address) : address;
+    // Unset previous default
+    await Address.update({ isDefault: false }, { where: { userId } });
+    // Upsert the default address
+    const existing = await Address.findOne({ where: { userId } });
+    const addrData = {
+      userId,
+      fullName: addr.fullName || user.fullName,
+      phone: addr.phone || '',
+      country: addr.country || '',
+      state: addr.state || '',
+      city: addr.city || '',
+      addressLine1: addr.line1 || addr.addressLine1 || '',
+      addressLine2: addr.line2 || addr.addressLine2 || null,
+      postalCode: addr.zip || addr.postalCode || null,
+      isDefault: true,
+      label: 'HOME'
+    };
+    if (existing) {
+      await existing.update(addrData);
+    } else {
+      await Address.create(addrData);
+    }
+    changes.push('delivery address');
+  }
 
   // Sync updated username to wallet
   if (updates.username) {

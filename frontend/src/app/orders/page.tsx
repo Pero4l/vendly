@@ -4,38 +4,45 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Header from '../../components/Header';
 import { apiRequest } from '../../utils/api';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import { Package, ArrowLeft, ShieldCheck, RefreshCw, AlertTriangle, CheckCircle, Clock, Truck, Search } from 'lucide-react';
 
-const STATUS_TABS = ['All', 'PENDING', 'PAID', 'SHIPPED', 'DELIVERED', 'DISPUTED'];
+const STATUS_TABS = ['All', 'pending', 'paid', 'shipped', 'delivered', 'disputed'];
 
 const STATUS_META: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  PENDING:   { label: 'Pending',   color: 'bg-yellow-100 text-yellow-700 border-yellow-200',   icon: <Clock className="h-3 w-3" /> },
-  PAID:      { label: 'Paid',      color: 'bg-blue-100 text-blue-700 border-blue-200',         icon: <ShieldCheck className="h-3 w-3" /> },
-  SHIPPED:   { label: 'Shipped',   color: 'bg-indigo-100 text-indigo-700 border-indigo-200',   icon: <Truck className="h-3 w-3" /> },
-  DELIVERED: { label: 'Delivered', color: 'bg-emerald-100 text-emerald-700 border-emerald-200',icon: <CheckCircle className="h-3 w-3" /> },
-  DISPUTED:  { label: 'Disputed',  color: 'bg-rose-100 text-rose-700 border-rose-200',         icon: <AlertTriangle className="h-3 w-3" /> },
+  pending:   { label: 'Pending',   color: 'bg-yellow-100 text-yellow-700 border-yellow-200',   icon: <Clock className="h-3 w-3" /> },
+  paid:      { label: 'Paid',      color: 'bg-blue-100 text-blue-700 border-blue-200',         icon: <ShieldCheck className="h-3 w-3" /> },
+  processing:{ label: 'Processing',color: 'bg-indigo-100 text-indigo-700 border-indigo-200',   icon: <RefreshCw className="h-3 w-3" /> },
+  shipped:   { label: 'Shipped',   color: 'bg-indigo-100 text-indigo-700 border-indigo-200',   icon: <Truck className="h-3 w-3" /> },
+  delivered: { label: 'Delivered', color: 'bg-emerald-100 text-emerald-700 border-emerald-200',icon: <CheckCircle className="h-3 w-3" /> },
+  completed: { label: 'Completed', color: 'bg-emerald-200 text-emerald-800 border-emerald-300',icon: <CheckCircle className="h-3 w-3" /> },
+  disputed:  { label: 'Disputed',  color: 'bg-rose-100 text-rose-700 border-rose-200',         icon: <AlertTriangle className="h-3 w-3" /> },
+  cancelled: { label: 'Cancelled', color: 'bg-neutral-100 text-neutral-500 border-neutral-200',icon: <AlertTriangle className="h-3 w-3" /> },
 };
 
 const MILESTONE_STAGES = [
-  { pct: 30, label: 'Order Locked', key: 'PAID' },
-  { pct: 20, label: 'Shipped',      key: 'SHIPPED' },
-  { pct: 50, label: 'Delivered',    key: 'DELIVERED' },
+  { pct: 30, label: 'Order Locked', key: 'paid' },
+  { pct: 20, label: 'Shipped',      key: 'shipped' },
+  { pct: 50, label: 'Delivered',    key: 'delivered' },
 ];
 
 function stageIndex(status: string) {
-  if (status === 'DELIVERED') return 3;
-  if (status === 'SHIPPED')   return 2;
-  if (status === 'PAID')      return 1;
+  if (status === 'delivered' || status === 'completed') return 3;
+  if (status === 'shipped')    return 2;
+  if (status === 'paid' || status === 'processing') return 1;
   return 0;
 }
 
 const MOCK_ORDERS = [
-  { id: 'ord_001', status: 'SHIPPED', totalAmount: '1.5', createdAt: new Date(Date.now()-86400000*2).toISOString(), product: { title: 'Premium Web3 Hardware Ledger', images: [{ imageUrl: 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&q=80&w=200' }] } },
-  { id: 'ord_002', status: 'PAID', totalAmount: '0.5', createdAt: new Date(Date.now()-86400000).toISOString(), product: { title: 'Celo NFT Artwork Collection', images: [] } },
-  { id: 'ord_003', status: 'DELIVERED', totalAmount: '2.0', createdAt: new Date(Date.now()-86400000*5).toISOString(), product: { title: 'Sleek Cyber Hoodie (Special Edition)', images: [] } },
+  { id: 'ord_001', status: 'shipped', totalAmount: '1.5', createdAt: new Date(Date.now()-86400000*2).toISOString(), items: [{ product: { title: 'Premium Web3 Hardware Ledger', images: [{ url: 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&q=80&w=200' }] } }] },
+  { id: 'ord_002', status: 'paid', totalAmount: '0.5', createdAt: new Date(Date.now()-86400000).toISOString(), items: [{ product: { title: 'Celo NFT Artwork Collection', images: [] } }] },
+  { id: 'ord_003', status: 'delivered', totalAmount: '2.0', createdAt: new Date(Date.now()-86400000*5).toISOString(), items: [{ product: { title: 'Sleek Cyber Hoodie (Special Edition)', images: [] } }] },
 ];
 
-export default function OrdersPage() {
+function OrdersContent() {
+  const searchParams = useSearchParams();
+  const justOrdered = searchParams.get('success') === '1';
   const [orders, setOrders] = useState<any[]>([]);
   const [filtered, setFiltered] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +72,17 @@ export default function OrdersPage() {
       <div className="hidden md:block"><Header /></div>
 
       <div className="max-w-2xl mx-auto px-4 pt-6 pb-32">
+        {/* Success banner after checkout */}
+        {justOrdered && (
+          <div className="mb-4 flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+            <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-emerald-800">Order placed successfully!</p>
+              <p className="text-xs text-emerald-600">Your payment is locked in escrow. The seller has been notified.</p>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center gap-3 mb-5">
           <Link href="/dashboard" className="p-1.5 rounded-lg hover:bg-neutral-100 transition-colors">
@@ -112,8 +130,8 @@ export default function OrdersPage() {
         ) : (
           <div className="space-y-3">
             {filtered.map(order => {
-              const meta = STATUS_META[order.status] || STATUS_META['PENDING'];
-              const img = order.product?.images?.[0]?.imageUrl || order.product?.images?.[0] || '';
+              const meta = STATUS_META[order.status] || STATUS_META['pending'];
+              const img = order.items?.[0]?.product?.images?.[0]?.url || order.items?.[0]?.product?.images?.[0]?.imageUrl || order.product?.images?.[0]?.url || order.product?.images?.[0]?.imageUrl || '';
               const stage = stageIndex(order.status);
               return (
                 <Link href={`/track-order?id=${order.id}`} key={order.id}
@@ -126,8 +144,11 @@ export default function OrdersPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="text-sm font-bold text-neutral-900 truncate">{order.product?.title || 'Product'}</p>
-                          <p className="text-[11px] text-neutral-400 mt-0.5">#{order.id.slice(0, 12)}</p>
+                          <p className="text-sm font-bold text-neutral-900 truncate">
+                            {order.items?.[0]?.product?.title || order.product?.title || 'Order'}
+                            {(order.items?.length || 0) > 1 ? ` +${(order.items?.length || 1) - 1} more` : ''}
+                          </p>
+                          <p className="text-[11px] text-neutral-400 mt-0.5">#{order.orderNumber || order.id.slice(0, 12)}</p>
                         </div>
                         <span className={`shrink-0 flex items-center gap-1 text-[10px] font-bold border rounded-full px-2 py-0.5 ${meta.color}`}>
                           {meta.icon} {meta.label}
@@ -162,5 +183,13 @@ export default function OrdersPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense>
+      <OrdersContent />
+    </Suspense>
   );
 }
