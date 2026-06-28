@@ -83,9 +83,10 @@ function HeaderContent() {
     }
   };
 
+  // Re-read user on every navigation (layout stays mounted in App Router)
   useEffect(() => {
     loadProfile();
-  }, []);
+  }, [pathname]);
 
   // Sync header search inputs when URL changes
   useEffect(() => {
@@ -221,21 +222,21 @@ function HeaderContent() {
             <div className="flex items-center gap-1 bg-neutral-800 rounded-md p-0.5 border border-neutral-700">
               <button
                 onClick={() => quickSignIn('BUYER')}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${currentUser?.role === 'BUYER' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white'
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${currentUser?.role === 'buyer' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white'
                   }`}
               >
                 Buyer
               </button>
               <button
                 onClick={() => quickSignIn('SELLER')}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${currentUser?.role === 'SELLER' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white'
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${currentUser?.role === 'seller' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white'
                   }`}
               >
                 Seller
               </button>
               <button
                 onClick={() => quickSignIn('ADMIN')}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${currentUser?.role === 'ADMIN' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white'
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${currentUser?.role === 'admin' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white'
                   }`}
               >
                 Admin
@@ -451,12 +452,12 @@ function HeaderContent() {
                 <Link href="/wallet" className={`hover:text-neutral-900 transition flex items-center gap-1 ${pathname === '/wallet' ? 'text-amber-600 font-bold' : ''}`}>
                   My Wallet
                 </Link>
-                {currentUser.role === 'SELLER' && (
+                {currentUser.role === 'seller' && (
                   <Link href="/store" className={`hover:text-neutral-900 transition ${pathname === '/store' ? 'text-amber-600 font-bold' : ''}`}>
                     Seller Storefront
                   </Link>
                 )}
-                {currentUser.role === 'ADMIN' && (
+                {currentUser.role === 'admin' && (
                   <Link href="/admin" className={`hover:text-neutral-900 transition ${pathname === '/admin' ? 'text-amber-600 font-bold' : ''}`}>
                     Admin Operations
                   </Link>
@@ -464,10 +465,19 @@ function HeaderContent() {
               </>
             )}
 
-            <a href="#" className="hover:text-neutral-900 flex items-center gap-1 transition-colors">
+            {/* Show Become a Vendor for buyers / guests */}
+            {(!currentUser || currentUser.role === 'buyer') && (
+              <Link href="/become-vendor"
+                className="flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-1 rounded-lg transition-colors text-[11px] tracking-wide">
+                <Store className="h-3 w-3" />
+                Become a Vendor
+              </Link>
+            )}
+
+            <Link href="/buyer-protection" className="hover:text-neutral-900 flex items-center gap-1 transition-colors">
               <ShieldAlert className="h-3.5 w-3.5 text-emerald-600" />
-              Buyer Protection Policy
-            </a>
+              Buyer Protection
+            </Link>
           </div>
 
         </div>

@@ -74,6 +74,14 @@ export default function StorePage() {
     try {
       const res = await apiRequest('/stores/my-store');
       if (res.success) {
+        // Backend returns a fresh token if stored token had wrong role
+        if (res.accessToken) {
+          localStorage.setItem('vendly_token', res.accessToken);
+          const stored = localStorage.getItem('vendly_user');
+          if (stored) {
+            try { localStorage.setItem('vendly_user', JSON.stringify({ ...JSON.parse(stored), role: 'seller' })); } catch {}
+          }
+        }
         setStore(res.data);
         setEditName(res.data.name || '');
         setEditDesc(res.data.description || '');
@@ -262,6 +270,60 @@ export default function StorePage() {
                   : <><Store className="h-4 w-4" /> Create My Store</>}
               </button>
             </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── PENDING APPROVAL ── */
+  if (store && store.status === 'pending') {
+    return (
+      <div className="min-h-screen bg-stone-50">
+        <div className="hidden md:block"><Header /></div>
+        <div className="max-w-lg mx-auto px-4 pt-16 pb-32 text-center">
+          <div className="bg-white rounded-2xl border border-amber-200 p-10 shadow-sm">
+            <div className="h-16 w-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-5">
+              <Clock className="h-8 w-8 text-amber-500" />
+            </div>
+            <h1 className="text-xl font-black text-neutral-900 mb-2">Your Store is Under Review</h1>
+            <p className="text-sm text-neutral-500 leading-relaxed mb-6">
+              Thanks for applying! Our team is reviewing your store <span className="font-bold text-neutral-800">"{store.name}"</span>.
+              You'll be able to list products as soon as an admin approves your application.
+            </p>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left space-y-2 mb-6">
+              <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">What happens next?</p>
+              <p className="text-xs text-amber-800 leading-relaxed">1. An admin reviews your store details</p>
+              <p className="text-xs text-amber-800 leading-relaxed">2. You receive a notification once approved</p>
+              <p className="text-xs text-amber-800 leading-relaxed">3. Reload this page to start listing products</p>
+            </div>
+            <button onClick={loadAll} className="inline-flex items-center gap-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 px-6 py-3 text-sm font-bold text-white transition-colors">
+              <RefreshCw className="h-4 w-4" /> Check Status
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── REJECTED ── */
+  if (store && store.status === 'rejected') {
+    return (
+      <div className="min-h-screen bg-stone-50">
+        <div className="hidden md:block"><Header /></div>
+        <div className="max-w-lg mx-auto px-4 pt-16 pb-32 text-center">
+          <div className="bg-white rounded-2xl border border-rose-200 p-10 shadow-sm">
+            <div className="h-16 w-16 rounded-full bg-rose-100 flex items-center justify-center mx-auto mb-5">
+              <XCircle className="h-8 w-8 text-rose-500" />
+            </div>
+            <h1 className="text-xl font-black text-neutral-900 mb-2">Application Not Approved</h1>
+            <p className="text-sm text-neutral-500 leading-relaxed mb-6">
+              Unfortunately, your store <span className="font-bold text-neutral-800">"{store.name}"</span> was not approved.
+              Please contact support if you believe this is a mistake.
+            </p>
+            <Link href="/contact" className="inline-flex items-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-700 px-6 py-3 text-sm font-bold text-white transition-colors">
+              Contact Support
+            </Link>
           </div>
         </div>
       </div>

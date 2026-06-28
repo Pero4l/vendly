@@ -28,12 +28,14 @@ export default function BecomeVendorPage() {
       {/* Hero */}
       <div className="bg-neutral-950 text-white px-4 py-16">
         <div className="max-w-2xl mx-auto text-center space-y-5">
-          <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-neutral-400 hover:text-white mb-2">
+         <div className='flex justify-between items-center'>
+           <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-neutral-400 hover:text-white mb-2">
             <ArrowLeft className="h-4 w-4" /> Back
           </Link>
           <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-full px-3 py-1 text-xs font-bold text-amber-400">
             <Store className="h-3.5 w-3.5" /> Vendly Seller Program
           </div>
+         </div>
           <h1 className="text-3xl sm:text-4xl font-black leading-tight">
             Become a <span className="text-amber-400">Vendly Vendor</span><br />
             Start Selling in Minutes

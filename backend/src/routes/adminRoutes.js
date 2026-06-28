@@ -6,6 +6,8 @@ const { authorizeRoles } = require('../middlewares/rbac');
 
 router.use(authenticateToken, authorizeRoles('admin'));
 
+router.get('/pending-stores', adminController.listPendingStores);
+router.get('/all-stores', adminController.listPendingStores); // same handler, passes ?status=
 router.post('/approve-store', adminController.approveStore);
 router.post('/suspend-user', adminController.suspendUser);
 router.post('/release-escrow', adminController.releaseEscrowStage);

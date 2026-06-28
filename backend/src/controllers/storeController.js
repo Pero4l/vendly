@@ -1,4 +1,6 @@
 const { Store, StoreProfile, User, Product, sequelize } = require('../models');
+const jwt = require('jsonwebtoken');
+const { JWT_SECRET } = require('../middlewares/auth');
 
 async function generateUniqueStoreSlug(name) {
   let slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'store';
@@ -14,7 +16,6 @@ async function generateUniqueStoreSlug(name) {
 async function applyVendor(req, res, next) {
   const transaction = await sequelize.transaction();
   try {
-    // Accept both `name` and `displayName` from frontend
     const displayName = req.body.displayName || req.body.name;
     const { description, logo, banner } = req.body;
 
@@ -25,7 +26,11 @@ async function applyVendor(req, res, next) {
     const user = await User.findByPk(req.user.id, { transaction });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    // Check if already has a store
+    if (user.role === 'admin') {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Admin accounts cannot create stores' });
+    }
+
     const existingProfile = await StoreProfile.findOne({ where: { userId: user.id }, transaction });
     if (existingProfile) {
       const existingStore = await Store.findOne({ where: { storeProfileId: existingProfile.id }, transaction });
@@ -35,11 +40,6 @@ async function applyVendor(req, res, next) {
         message: 'You already have a store',
         data: { store: existingStore, storeProfile: existingProfile }
       });
-    }
-
-    if (user.role === 'admin') {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, message: 'Admin accounts cannot create stores' });
     }
 
     const logoJson = logo ? (typeof logo === 'string' ? { url: logo } : logo) : null;
@@ -64,16 +64,17 @@ async function applyVendor(req, res, next) {
       name: displayName,
       slug,
       description,
-      status: 'active',
+      status: 'pending',
       isVerified: false
     }, { transaction });
 
-    await user.update({ role: 'seller', storeProfileId: storeProfile.id }, { transaction });
+    // Keep role as 'buyer' — it becomes 'seller' only when admin approves
+    await user.update({ storeProfileId: storeProfile.id }, { transaction });
     await transaction.commit();
 
     res.status(201).json({
       success: true,
-      message: 'Store created! You are now a verified seller.',
+      message: 'Store application submitted! An admin will review it shortly.',
       data: { store, storeProfile }
     });
   } catch (error) {
@@ -93,9 +94,19 @@ async function getStore(req, res, next) {
       return res.status(404).json({ success: false, message: 'No store found. Apply to become a vendor first.' });
     }
 
-    // Return a flat structure that's easy to use on the frontend
+    // If store is active but token still says 'buyer', issue a fresh seller token
+    // (happens right after admin approval before the seller re-logs)
+    let freshToken = null;
+    if (storeProfile.store.status === 'active' && req.user.role !== 'seller') {
+      const dbUser = await User.findByPk(req.user.id);
+      if (dbUser && dbUser.role === 'seller') {
+        freshToken = jwt.sign({ id: dbUser.id, email: dbUser.email, role: 'seller' }, JWT_SECRET, { expiresIn: '1d' });
+      }
+    }
+
     res.status(200).json({
       success: true,
+      ...(freshToken ? { accessToken: freshToken, role: 'seller' } : {}),
       data: {
         id: storeProfile.store.id,
         name: storeProfile.store.name,

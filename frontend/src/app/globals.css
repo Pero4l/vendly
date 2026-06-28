@@ -108,7 +108,21 @@ body {
   display: none;
 }
 
-/* ── 6. Animations ─────────────────────────────────────────────── */
+/* ── 6. Mobile Input — Prevent iOS Auto-Zoom ───────────────────── */
+/*
+ * iOS Safari zooms the viewport when a focused input has font-size < 16px.
+ * Forcing 16px on mobile prevents the zoom without changing desktop styles.
+ * The !important overrides any Tailwind text-sm (14px) on these elements.
+ */
+@media screen and (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* ── 7. Animations ─────────────────────────────────────────────── */
 
 /* Ambient glow pulse — used on the hero section illustration */
 @keyframes pulseGlow {

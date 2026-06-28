@@ -449,7 +449,7 @@ export default function WalletPage() {
         </div>
 
         {/* Security Notice */}
-        <div className="rounded-2xl bg-neutral-950 text-white p-6 flex items-start gap-4 border border-neutral-900">
+        {/* <div className="rounded-2xl bg-neutral-950 text-white p-6 flex items-start gap-4 border border-neutral-900">
           <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0 border border-amber-500/20">
             <ShieldCheck className="h-5 w-5 text-amber-400" />
           </div>
@@ -459,7 +459,7 @@ export default function WalletPage() {
               Your Vendly wallet private key is AES-256 encrypted and stored in our secure database — never exposed in transit. For non-custodial control, use the RainbowKit wallet in the header to connect your own hardware wallet.
             </p>
           </div>
-        </div>
+        </div> */}
 
       </main>
     </div>

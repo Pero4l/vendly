@@ -2,17 +2,20 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Bell, UserCircle, ShoppingCart } from 'lucide-react';
 import { getUser } from '../utils/api';
 import { useCart } from '../context/CartContext';
 
 export default function MobileTopBar() {
+  const pathname = usePathname();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const { totalItems } = useCart();
 
+  // Re-read user on every navigation (layout stays mounted in App Router)
   useEffect(() => {
     setCurrentUser(getUser());
-  }, []);
+  }, [pathname]);
 
   return (
     <header className="md:hidden sticky top-0 z-50 bg-white/95 backdrop-blur-lg border-b border-neutral-100">

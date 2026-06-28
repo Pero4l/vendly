@@ -59,7 +59,7 @@ export default function FloatingChat() {
   const fmt = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="fixed bottom-24 right-4 z-50 md:bottom-6 md:right-6">
+    <div className="fixed bottom-17 right-4 z-50 md:bottom-6 md:right-6">
       {/* Chat window */}
       {open && (
         <div className="mb-3 w-80 bg-white rounded-2xl border border-neutral-200 shadow-2xl flex flex-col overflow-hidden"

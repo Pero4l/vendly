@@ -24,9 +24,10 @@ export default function BottomNav() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const { totalItems } = useCart();
 
+  // Re-read user on every navigation (layout stays mounted in App Router)
   useEffect(() => {
     setCurrentUser(getUser());
-  }, [moreOpen]);
+  }, [pathname]);
 
   const handleLogout = async () => {
     try { await apiRequest('/auth/logout', { method: 'POST' }); } catch {}
@@ -100,13 +101,13 @@ export default function BottomNav() {
             <MoreMenuItem href="/marketplace" icon={<ShoppingBag className="h-5 w-5" />} label="Marketplace" color="text-neutral-700" onPress={close} />
 
             {/* Seller / Admin */}
-            {currentUser?.role === 'SELLER' && (
+                    {currentUser?.role === 'seller' && (
               <>
                 <SectionLabel label="Seller" />
                 <MoreMenuItem href="/store" icon={<Store className="h-5 w-5" />} label="Seller Storefront" color="text-amber-600" onPress={close} />
               </>
             )}
-            {currentUser?.role === 'ADMIN' && (
+            {currentUser?.role === 'admin' && (
               <>
                 <SectionLabel label="Admin" />
                 <MoreMenuItem href="/admin" icon={<Shield className="h-5 w-5" />} label="Admin Operations" color="text-rose-600" onPress={close} />

@@ -35,6 +35,8 @@ async function createProduct(req, res, next) {
 
     const store = await Store.findOne({ where: { storeProfileId: storeProfile.id } });
     if (!store) return res.status(400).json({ success: false, message: 'Store not found' });
+    if (store.status === 'pending') return res.status(403).json({ success: false, message: 'Your store is pending admin approval. You can list products once approved.' });
+    if (store.status === 'rejected') return res.status(403).json({ success: false, message: 'Your store application was rejected. Please contact support.' });
     if (store.status === 'suspended') return res.status(403).json({ success: false, message: 'Store is suspended' });
 
     // Resolve category: if categoryId not provided or looks like a number, find or use first available
