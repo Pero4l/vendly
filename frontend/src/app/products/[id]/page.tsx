@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Header from '../../../components/Header';
-import { apiRequest } from '../../../utils/api';
-import { ShoppingCart, ShieldCheck, RefreshCw, Star, ArrowLeft, Truck, Package, ShieldAlert, Award, ChevronRight, HelpCircle, Heart } from 'lucide-react';
+import { apiRequest, getUser } from '../../../utils/api';
+import { ShoppingCart, ShieldCheck, RefreshCw, ArrowLeft, Truck, Package, ShieldAlert, Award, ChevronRight, Heart, Store } from 'lucide-react';
 import Link from 'next/link';
 import { useCart } from '../../../context/CartContext';
 
@@ -21,6 +21,7 @@ export default function ProductDetails() {
   const [showEscrowDetails, setShowEscrowDetails] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const [cartAdded, setCartAdded] = useState(false);
+  const [isOwnProduct, setIsOwnProduct] = useState(false);
   const { addItem } = useCart();
 
   const fetchProduct = async () => {
@@ -28,6 +29,14 @@ export default function ProductDetails() {
       const res = await apiRequest(`/products/${id}`);
       if (res.success) {
         setProduct(res.data);
+        // Check if current user owns this product's store
+        const user = getUser();
+        if (user?.role === 'seller') {
+          const storeRes = await apiRequest('/stores/my-store').catch(() => null);
+          if (storeRes?.success && storeRes.data?.id === res.data?.storeId) {
+            setIsOwnProduct(true);
+          }
+        }
       }
     } catch (err) {
       console.error(err);
@@ -365,34 +374,47 @@ export default function ProductDetails() {
 
 
               {/* Main Actions */}
-              <div className="space-y-2">
-                <button
-                  onClick={handlePurchase}
-                  disabled={purchaseLoading || product.quantity === 0}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg bg-amber-500 hover:bg-amber-600 py-3 text-xs font-bold text-white transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  <ShoppingCart className="h-4 w-4" />
-                  {purchaseLoading ? statusMessage || 'Processing...' : product.quantity === 0 ? 'Out of Stock' : 'Buy Now — Escrow Protected'}
-                </button>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleAddToCart}
-                    disabled={product.quantity === 0}
-                    className={`flex-1 flex items-center justify-center gap-2 rounded-lg border py-2.5 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 ${cartAdded ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700'}`}
-                  >
-                    <ShoppingCart className="h-3.5 w-3.5" />
-                    {cartAdded ? 'Added!' : 'Add to Cart'}
-                  </button>
-                  <button
-                    onClick={toggleFavorite}
-                    className={`h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border transition-colors cursor-pointer ${isFavorite ? 'border-rose-300 bg-rose-50 text-rose-500' : 'border-neutral-300 bg-white text-neutral-400 hover:text-rose-400'}`}
-                    title={isFavorite ? 'Remove from favorites' : 'Save to favorites'}
-                  >
-                    <Heart className="h-4 w-4" fill={isFavorite ? 'currentColor' : 'none'} />
-                  </button>
+              {isOwnProduct ? (
+                <div className="space-y-3">
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-center space-y-2">
+                    <Store className="h-6 w-6 text-amber-500 mx-auto" />
+                    <p className="text-xs font-bold text-amber-800">This is your product</p>
+                    <p className="text-[11px] text-amber-700 leading-relaxed">You can't purchase your own listing. Manage it from your seller dashboard.</p>
+                  </div>
+                  <Link href="/store" className="w-full flex items-center justify-center gap-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 py-3 text-xs font-bold text-white transition-colors">
+                    <Store className="h-4 w-4" /> Go to Seller Dashboard
+                  </Link>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-2">
+                  <button
+                    onClick={handlePurchase}
+                    disabled={purchaseLoading || product.quantity === 0}
+                    className="w-full flex items-center justify-center gap-2 rounded-lg bg-amber-500 hover:bg-amber-600 py-3 text-xs font-bold text-white transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    <ShoppingCart className="h-4 w-4" />
+                    {purchaseLoading ? statusMessage || 'Processing...' : product.quantity === 0 ? 'Out of Stock' : 'Buy Now — Escrow Protected'}
+                  </button>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleAddToCart}
+                      disabled={product.quantity === 0}
+                      className={`flex-1 flex items-center justify-center gap-2 rounded-lg border py-2.5 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 ${cartAdded ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700'}`}
+                    >
+                      <ShoppingCart className="h-3.5 w-3.5" />
+                      {cartAdded ? 'Added!' : 'Add to Cart'}
+                    </button>
+                    <button
+                      onClick={toggleFavorite}
+                      className={`h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border transition-colors cursor-pointer ${isFavorite ? 'border-rose-300 bg-rose-50 text-rose-500' : 'border-neutral-300 bg-white text-neutral-400 hover:text-rose-400'}`}
+                      title={isFavorite ? 'Remove from favorites' : 'Save to favorites'}
+                    >
+                      <Heart className="h-4 w-4" fill={isFavorite ? 'currentColor' : 'none'} />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Escrow payout toggle box */}
               <div className="border border-neutral-100 rounded-lg p-3 space-y-2">

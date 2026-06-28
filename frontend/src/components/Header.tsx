@@ -46,19 +46,16 @@ function HeaderContent() {
   // Search States inside Header
   const [headerSearch, setHeaderSearch] = useState('');
   const [headerCategory, setHeaderCategory] = useState('');
+  const [categories, setCategories] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<{ stores: any[]; products: any[] } | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const categories = [
-    { id: '1', name: 'Electronics' },
-    { id: '2', name: 'Digital Services' },
-    { id: '3', name: 'Apparel' },
-    { id: '4', name: 'Home & Kitchen' }
-  ];
-
-  const MOCK_NOTIFS = [
-    { id: '1', type: 'order', title: 'Order Placed', message: 'Your order is awaiting seller confirmation.', createdAt: new Date(Date.now()-300000).toISOString(), read: false },
-    { id: '2', type: 'escrow', title: 'Escrow Milestone', message: 'Milestone 1 (30%) released to seller.', createdAt: new Date(Date.now()-3600000).toISOString(), read: true },
-    { id: '3', type: 'wallet', title: 'Wallet Ready', message: 'Your custodial wallet has been created.', createdAt: new Date(Date.now()-86400000).toISOString(), read: true },
-  ];
+  useEffect(() => {
+    apiRequest('/categories').then(res => {
+      if (res.success && res.data?.length) setCategories(res.data);
+    }).catch(() => {});
+  }, []);
 
   const openNotifDropdown = async () => {
     setShowNotifDropdown(v => !v);
@@ -66,8 +63,8 @@ function HeaderContent() {
       setNotifLoading(true);
       try {
         const res = await apiRequest('/notifications');
-        setNotifications(res.success && res.data?.length ? res.data.slice(0, 5) : MOCK_NOTIFS);
-      } catch { setNotifications(MOCK_NOTIFS); }
+        setNotifications(res.success && res.data?.length ? res.data.slice(0, 5) : []);
+      } catch { setNotifications([]); }
       finally { setNotifLoading(false); }
     }
   };
@@ -96,8 +93,30 @@ function HeaderContent() {
     setHeaderCategory(qCat);
   }, [searchParams]);
 
+  // Live search: debounce 350ms then query both stores + products
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (!headerSearch.trim()) { setSearchResults(null); return; }
+    searchDebounceRef.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const [prodRes, storeRes] = await Promise.all([
+          apiRequest(`/products?search=${encodeURIComponent(headerSearch)}&limit=4`),
+          apiRequest(`/stores?search=${encodeURIComponent(headerSearch)}`)
+        ]);
+        setSearchResults({
+          products: prodRes.success ? (prodRes.data || []).slice(0, 4) : [],
+          stores: storeRes.success ? (storeRes.data || []).slice(0, 3) : []
+        });
+      } catch { setSearchResults(null); }
+      finally { setSearchLoading(false); }
+    }, 350);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+  }, [headerSearch]);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setSearchResults(null);
     const query = new URLSearchParams();
     if (headerSearch) query.append('search', headerSearch);
     if (headerCategory) query.append('categoryId', headerCategory);
@@ -143,57 +162,6 @@ function HeaderContent() {
     router.push('/');
   };
 
-  const quickSignIn = async (targetRole: string) => {
-    setLoading(true);
-    try {
-      const emailMap: Record<string, string> = {
-        BUYER: 'buyer@vendly.com',
-        SELLER: 'seller@vendly.com',
-        ADMIN: 'admin@vendly.com'
-      };
-      const nameMap: Record<string, string> = {
-        BUYER: 'Alice Buyer',
-        SELLER: 'Bob Storefront',
-        ADMIN: 'Chief Moderator'
-      };
-
-      const targetEmail = emailMap[targetRole];
-      const targetName = nameMap[targetRole];
-
-      try {
-        const loginRes = await apiRequest('/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({ email: targetEmail, password: 'password123' })
-        });
-        saveToken(loginRes.data.accessToken);
-      } catch (err) {
-        await apiRequest('/auth/register', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: targetName,
-            email: targetEmail,
-            password: 'password123',
-            role: targetRole
-          })
-        });
-        const loginRes = await apiRequest('/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({ email: targetEmail, password: 'password123' })
-        });
-        saveToken(loginRes.data.accessToken);
-      }
-
-      await loadProfile();
-      router.push('/dashboard');
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
-    } catch (err: any) {
-      console.error('Quick sign-in error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     /*
@@ -204,7 +172,7 @@ function HeaderContent() {
     <header className="hidden md:block sticky top-0 z-50 w-full bg-white border-b border-neutral-200">
 
       {/* 1. Thin Top Utility Banner */}
-      <div className="w-full bg-neutral-900 py-1.5 px-4 text-white text-[11px] sm:px-6 lg:px-8">
+      {/* <div className="w-full bg-neutral-900 py-1.5 px-4 text-white text-[11px] sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl flex flex-col sm:flex-row justify-between items-center gap-2">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1 text-amber-400 font-semibold">
@@ -244,7 +212,7 @@ function HeaderContent() {
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* 2. Main High-Visibility Header */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3.5">
@@ -277,39 +245,99 @@ function HeaderContent() {
           </div>
 
           {/* Large Amazon-Style Search Form */}
-          <form
-            onSubmit={handleSearchSubmit}
-            className="flex-1 w-full max-w-2xl flex items-center border-2 border-neutral-350 hover:border-amber-500 focus-within:border-amber-500 rounded-lg overflow-hidden transition-colors"
-          >
-            <div className="relative bg-neutral-100 border-r border-neutral-350">
-              <select
-                value={headerCategory}
-                onChange={e => setHeaderCategory(e.target.value)}
-                className="h-10 px-3 bg-neutral-100 text-neutral-700 text-xs font-semibold focus:outline-none appearance-none pr-8 cursor-pointer rounded-l-md"
-              >
-                <option value="">All Departments</option>
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2.5 top-3.5 h-3.5 w-3.5 text-neutral-500 pointer-events-none" />
-            </div>
-
-            <input
-              type="text"
-              placeholder="Search secure Celo listings, hardware ledgers, art collections..."
-              value={headerSearch}
-              onChange={e => setHeaderSearch(e.target.value)}
-              className="flex-1 h-10 px-4 text-sm text-neutral-900 bg-white placeholder-neutral-400 focus:outline-none"
-            />
-
-            <button
-              type="submit"
-              className="h-10 px-6 bg-amber-500 hover:bg-amber-600 text-white font-bold transition-colors flex items-center justify-center cursor-pointer"
+          <div className="flex-1 w-full max-w-2xl relative">
+            <form
+              onSubmit={handleSearchSubmit}
+              className="flex items-center border-2 border-neutral-350 hover:border-amber-500 focus-within:border-amber-500 rounded-lg overflow-hidden transition-colors"
             >
-              <Search className="h-4 w-4" />
-            </button>
-          </form>
+              <div className="relative bg-neutral-100 border-r border-neutral-350">
+                <select
+                  value={headerCategory}
+                  onChange={e => setHeaderCategory(e.target.value)}
+                  className="h-10 px-3 bg-neutral-100 text-neutral-700 text-xs font-semibold focus:outline-none appearance-none pr-8 cursor-pointer rounded-l-md"
+                >
+                  <option value="">All Departments</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-3.5 h-3.5 w-3.5 text-neutral-500 pointer-events-none" />
+              </div>
+
+              <input
+                type="text"
+                placeholder="Search products, stores, categories..."
+                value={headerSearch}
+                onChange={e => setHeaderSearch(e.target.value)}
+                onBlur={() => setTimeout(() => setSearchResults(null), 200)}
+                className="flex-1 h-10 px-4 text-sm text-neutral-900 bg-white placeholder-neutral-400 focus:outline-none"
+              />
+
+              <button
+                type="submit"
+                className="h-10 px-6 bg-amber-500 hover:bg-amber-600 text-white font-bold transition-colors flex items-center justify-center cursor-pointer"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+            </form>
+
+            {/* Live search dropdown */}
+            {searchResults && (searchResults.stores.length > 0 || searchResults.products.length > 0) && (
+              <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-neutral-200 rounded-xl shadow-xl overflow-hidden">
+                {searchResults.stores.length > 0 && (
+                  <div>
+                    <p className="px-4 pt-3 pb-1 text-[10px] font-black text-neutral-400 uppercase tracking-widest">Stores</p>
+                    {searchResults.stores.map((s: any) => (
+                      <Link key={s.id} href={`/marketplace?storeId=${s.id}`}
+                        onClick={() => { setSearchResults(null); setHeaderSearch(''); }}
+                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-amber-50 transition-colors">
+                        <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-xs font-black text-amber-700 shrink-0">
+                          {s.name?.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-neutral-900 truncate">{s.name}</p>
+                          <p className="text-[10px] text-neutral-400 truncate">{s.description || 'Verified Vendly Store'}</p>
+                        </div>
+                        <Store className="h-3.5 w-3.5 text-neutral-300 ml-auto shrink-0" />
+                      </Link>
+                    ))}
+                  </div>
+                )}
+                {searchResults.products.length > 0 && (
+                  <div className={searchResults.stores.length > 0 ? 'border-t border-neutral-100' : ''}>
+                    <p className="px-4 pt-3 pb-1 text-[10px] font-black text-neutral-400 uppercase tracking-widest">Products</p>
+                    {searchResults.products.map((p: any) => {
+                      const img = p.images?.[0]?.url || p.images?.[0]?.imageUrl || '';
+                      return (
+                        <Link key={p.id} href={`/products/${p.id}`}
+                          onClick={() => { setSearchResults(null); setHeaderSearch(''); }}
+                          className="flex items-center gap-3 px-4 py-2.5 hover:bg-amber-50 transition-colors">
+                          <div className="h-8 w-8 rounded-lg bg-neutral-100 overflow-hidden shrink-0">
+                            {img ? <img src={img} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full bg-amber-100" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold text-neutral-900 truncate">{p.title}</p>
+                            <p className="text-[10px] text-neutral-400">{p.price} CELO</p>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="border-t border-neutral-100 px-4 py-2.5">
+                  <button onClick={handleSearchSubmit as any}
+                    className="text-xs font-bold text-amber-600 hover:text-amber-700 transition-colors">
+                    See all results for &ldquo;{headerSearch}&rdquo; →
+                  </button>
+                </div>
+              </div>
+            )}
+            {searchLoading && (
+              <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-neutral-200 rounded-xl shadow-xl px-4 py-3">
+                <p className="text-xs text-neutral-400">Searching...</p>
+              </div>
+            )}
+          </div>
 
           {/* Right Controls */}
           <div className="hidden md:flex items-center gap-4">
@@ -395,7 +423,7 @@ function HeaderContent() {
 
                 <button
                   onClick={handleLogout}
-                  className="p-2 hover:bg-neutral-100 rounded-full text-neutral-500 hover:text-neutral-900 transition-colors"
+                  className="p-2 hover:bg-neutral-100 rounded-full text-red-700 hover:text-neutral-900 transition-colors"
                   title="Logout Account"
                 >
                   <LogOut className="h-4 w-4" />
@@ -463,15 +491,6 @@ function HeaderContent() {
                   </Link>
                 )}
               </>
-            )}
-
-            {/* Show Become a Vendor for buyers / guests */}
-            {(!currentUser || currentUser.role === 'buyer') && (
-              <Link href="/become-vendor"
-                className="flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-1 rounded-lg transition-colors text-[11px] tracking-wide">
-                <Store className="h-3 w-3" />
-                Become a Vendor
-              </Link>
             )}
 
             <Link href="/buyer-protection" className="hover:text-neutral-900 flex items-center gap-1 transition-colors">

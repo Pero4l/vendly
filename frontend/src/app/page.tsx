@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import {
   ShieldCheck,
@@ -20,6 +20,31 @@ import {
   ArrowRightLeft
 } from 'lucide-react';
 import Link from 'next/link';
+import { apiRequest } from '../utils/api';
+
+const CAT_IMAGES: Record<string, string> = {
+  'Electronics':         'https://images.unsplash.com/photo-1498049794561-7780e7231661?auto=format&fit=crop&q=80&w=600',
+  'Digital Services':   'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=600',
+  'Apparel & Fashion':  'https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&q=80&w=600',
+  'Home & Kitchen':     'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&q=80&w=600',
+  'Health & Beauty':    'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&q=80&w=600',
+  'Sports & Outdoors':  'https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?auto=format&fit=crop&q=80&w=600',
+  'Books & Media':      'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?auto=format&fit=crop&q=80&w=600',
+  'Art & Collectibles': 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?auto=format&fit=crop&q=80&w=600',
+};
+const getCatImage = (name: string) =>
+  CAT_IMAGES[name] || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&q=80&w=600';
+
+const CAT_DESC: Record<string, string> = {
+  'Electronics':         'Hardware wallets, secure devices, Celo-compatible electronics.',
+  'Digital Services':   'Domain names, SaaS tokens, subscriptions, and certificates.',
+  'Apparel & Fashion':  'Exclusive drops, streetwear, and merchandise with NFC tags.',
+  'Home & Kitchen':     'Furniture, appliances, and kitchen items with delivery guarantees.',
+  'Health & Beauty':    'Wellness products, cosmetics, and supplements — verified sellers.',
+  'Sports & Outdoors':  'Equipment, activewear, and outdoor gear from trusted merchants.',
+  'Books & Media':      'Physical books, media, educational resources, and collectibles.',
+  'Art & Collectibles': 'NFT-backed physical art, limited editions, and collectibles.',
+};
 
 // Interactive Escrow Simulator Stages data
 const SIMULATOR_STAGES = [
@@ -66,12 +91,14 @@ export default function Home() {
     }
   };
 
-  const categories = [
-    { id: '1', name: 'Electronics', slug: 'electronics', count: '12 active listings', image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=600', desc: 'Secure purchase of hardware wallets, physical ledgers, and secure electronics.' },
-    { id: '2', name: 'Digital Services', slug: 'digital-services', count: '8 active listings', image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=600', desc: 'Domain names, digital subscriptions, certificates, and escrow-released SaaS tokens.' },
-    { id: '3', name: 'Apparel', slug: 'apparel', count: '15 active listings', image: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&q=80&w=600', desc: 'Exclusive drops, high-fashion streetwear, and merchandise with physical NFC/QR tags.' },
-    { id: '4', name: 'Home & Kitchen', slug: 'home-kitchen', count: '5 active listings', image: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=600', desc: 'Premium home furniture, appliances, and kitchen items backed by escrow delivery guarantees.' }
-  ];
+  const [categories, setCategories] = useState<any[]>([]);
+  useEffect(() => {
+    apiRequest('/categories').then(res => {
+      if (res.success && Array.isArray(res.data) && res.data.length) {
+        setCategories(res.data);
+      }
+    }).catch(() => {});
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen bg-white text-neutral-900 selection:bg-amber-100 selection:text-amber-900">
@@ -490,38 +517,40 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {categories.map((cat) => (
-              <div
-                key={cat.id}
-                className="group bg-white border border-neutral-200 rounded-2xl overflow-hidden flex flex-col justify-between hover:shadow-lg transition-all"
-              >
-                <div>
-                  <div className="h-44 overflow-hidden relative bg-neutral-100">
-                    <img
-                      src={cat.image}
-                      alt={cat.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-                  <div className="p-5 space-y-2">
-                    <div className="flex justify-between items-center">
-                      <h3 className="font-extrabold text-neutral-900 text-base group-hover:text-amber-500 transition-colors">{cat.name}</h3>
-                      <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider bg-neutral-55 px-2 py-0.5 rounded border border-neutral-150">{cat.count}</span>
+            {categories.length === 0
+              ? Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-72 bg-neutral-100 rounded-2xl animate-pulse" />
+                ))
+              : categories.map((cat) => (
+                <div
+                  key={cat.id}
+                  className="group bg-white border border-neutral-200 rounded-2xl overflow-hidden flex flex-col justify-between hover:shadow-lg transition-all"
+                >
+                  <div>
+                    <div className="h-44 overflow-hidden relative bg-neutral-100">
+                      <img
+                        src={getCatImage(cat.name)}
+                        alt={cat.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
                     </div>
-                    <p className="text-xs text-neutral-555 leading-relaxed">{cat.desc}</p>
+                    <div className="p-5 space-y-2">
+                      <h3 className="font-extrabold text-neutral-900 text-base group-hover:text-amber-500 transition-colors">{cat.name}</h3>
+                      <p className="text-xs text-neutral-500 leading-relaxed">{CAT_DESC[cat.name] || cat.description || 'Browse verified products in this category.'}</p>
+                    </div>
+                  </div>
+                  <div className="p-5 pt-0">
+                    <Link
+                      href={`/marketplace?categoryId=${cat.id}`}
+                      className="w-full rounded-lg bg-neutral-900 hover:bg-amber-500 hover:text-white py-2.5 text-xs font-bold text-white transition-all flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                    >
+                      Browse Department
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
                   </div>
                 </div>
-                <div className="p-5 pt-0">
-                  <Link
-                    href={`/marketplace?categoryId=${cat.id}`}
-                    className="w-full rounded-lg bg-neutral-900 hover:bg-amber-500 hover:text-white py-2.5 text-xs font-bold text-white transition-all flex items-center justify-center gap-1 cursor-pointer shadow-xs"
-                  >
-                    Browse Department
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                </div>
-              </div>
-            ))}
+              ))
+            }
           </div>
 
         </div>
@@ -653,10 +682,10 @@ export default function Home() {
           </div>
 
           <div className="flex flex-wrap gap-x-6 gap-y-2 font-semibold">
-            <a href="#" className="hover:text-neutral-900 transition-colors">Smart Contract Audit</a>
-            <a href="#" className="hover:text-neutral-900 transition-colors">Developer SDK</a>
-            <a href="#" className="hover:text-neutral-900 transition-colors">Privacy & Security</a>
-            <a href="#" className="hover:text-neutral-900 transition-colors">Moderator Guidelines</a>
+            <Link href="/marketplace" className="hover:text-neutral-900 transition-colors">Marketplace</Link>
+            <Link href="/buyer-protection" className="hover:text-neutral-900 transition-colors">Buyer Protection</Link>
+            <Link href="/store" className="hover:text-neutral-900 transition-colors">Sell on Vendly</Link>
+            <Link href="/support" className="hover:text-neutral-900 transition-colors">Support</Link>
           </div>
         </div>
 

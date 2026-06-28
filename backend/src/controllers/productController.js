@@ -60,6 +60,8 @@ async function createProduct(req, res, next) {
       status: 'active'
     });
 
+    await storeProfile.increment('totalProducts');
+
     res.status(201).json({ success: true, message: 'Product created', data: product });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
@@ -68,7 +70,7 @@ async function createProduct(req, res, next) {
 
 async function listProducts(req, res, next) {
   try {
-    const { search, categoryId, storeId, minPrice, maxPrice, sortBy, order } = req.query;
+    const { search, categoryId, storeId, minPrice, maxPrice, minRating, sortBy, order } = req.query;
     const filter = { status: ['active', 'out_of_stock'] };
 
     if (search) filter[Op.or] = [
@@ -82,6 +84,7 @@ async function listProducts(req, res, next) {
       if (minPrice) filter.price[Op.gte] = parseFloat(minPrice);
       if (maxPrice) filter.price[Op.lte] = parseFloat(maxPrice);
     }
+    if (minRating) filter.rating = { [Op.gte]: parseFloat(minRating) };
 
     const products = await Product.findAll({
       where: filter,
@@ -143,13 +146,16 @@ async function updateProduct(req, res, next) {
 async function deleteProduct(req, res, next) {
   try {
     const product = await Product.findByPk(req.params.id, {
-      include: [{ model: Store, as: 'store', include: [{ model: StoreProfile, as: 'storeProfile', attributes: ['userId'] }] }]
+      include: [{ model: Store, as: 'store', include: [{ model: StoreProfile, as: 'storeProfile' }] }]
     });
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
     if (product.store.storeProfile.userId !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
     await product.destroy();
+    // Decrement counter (floor at 0)
+    const sp = product.store.storeProfile;
+    if (sp && sp.totalProducts > 0) await sp.decrement('totalProducts');
     res.status(200).json({ success: true, message: 'Product deleted' });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });

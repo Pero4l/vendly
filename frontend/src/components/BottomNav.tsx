@@ -92,7 +92,7 @@ export default function BottomNav() {
             {/* Orders & Disputes */}
             <SectionLabel label="Orders" />
             <MoreMenuItem href="/track-order" icon={<Package className="h-5 w-5" />} label="Track Order" color="text-emerald-600" onPress={close} />
-            <MoreMenuItem href="/dashboard" icon={<AlertTriangle className="h-5 w-5" />} label="Disputes" color="text-rose-500" onPress={close} />
+            <MoreMenuItem href="/orders" icon={<AlertTriangle className="h-5 w-5" />} label="Disputes" color="text-rose-500" onPress={close} />
             <MoreMenuItem href="/cart" icon={<ShoppingCart className="h-5 w-5" />} label="My Cart" color="text-amber-600" badge={totalItems > 0} badgeCount={totalItems} onPress={close} />
 
             {/* Discover */}
@@ -114,9 +114,13 @@ export default function BottomNav() {
               </>
             )}
 
-            {/* Grow */}
-            <SectionLabel label="Grow" />
-            <MoreMenuItem href="/become-vendor" icon={<Store className="h-5 w-5" />} label="Become a Vendor" color="text-amber-600" onPress={close} />
+            {/* Grow — only for buyers/guests */}
+            {(!currentUser?.role || currentUser.role === 'buyer') && (
+              <>
+                <SectionLabel label="Grow" />
+                <MoreMenuItem href="/store" icon={<Store className="h-5 w-5" />} label="Become a Vendor" color="text-amber-600" onPress={close} />
+              </>
+            )}
 
             {/* Help */}
             <SectionLabel label="Help & Settings" />

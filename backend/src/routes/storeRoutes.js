@@ -3,6 +3,9 @@ const router = express.Router();
 const storeController = require('../controllers/storeController');
 const { authenticateToken } = require('../middlewares/auth');
 
+// Public store listing + search
+router.get('/', storeController.listStores);
+
 // Apply to become vendor / create store (any authenticated user)
 router.post('/apply', authenticateToken, storeController.applyVendor);
 router.post('/', authenticateToken, storeController.applyVendor);

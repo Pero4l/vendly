@@ -1,59 +1,76 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import Header from '../../components/Header';
 import { apiRequest } from '../../utils/api';
-import { ShoppingBag, Search, Sparkles, Filter, ShieldCheck, ArrowRight, Star, RefreshCw, AlertCircle, ShoppingCart, Heart } from 'lucide-react';
+import { ShoppingBag, Search, Sparkles, Filter, ShieldCheck, ArrowRight, Star, RefreshCw, ShoppingCart, Heart } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCart } from '../../context/CartContext';
+
+const CAT_IMAGES: Record<string, string> = {
+  'Electronics':         'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=400',
+  'Digital Services':   'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=400',
+  'Apparel & Fashion':  'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&q=80&w=400',
+  'Home & Kitchen':     'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=400',
+  'Health & Beauty':    'https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&q=80&w=400',
+  'Sports & Outdoors':  'https://images.unsplash.com/photo-1547347298-4074fc3086f0?auto=format&fit=crop&q=80&w=400',
+  'Books & Media':      'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&q=80&w=400',
+  'Art & Collectibles': 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&q=80&w=400',
+};
+const getCatImage = (name: string) =>
+  CAT_IMAGES[name] || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&q=80&w=400';
 
 function MarketplaceContent() {
   const searchParams = useSearchParams();
 
   const [products, setProducts] = useState<any[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [storeFilter, setStoreFilter] = useState('');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [minRating, setMinRating] = useState('');
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [seedLoading, setSeedLoading] = useState(false);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [addedToCart, setAddedToCart] = useState<string | null>(null);
   const { addItem } = useCart();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Read URL search params for instant header-homepage sync
   useEffect(() => {
     const qSearch = searchParams.get('search') || '';
     const qCat = searchParams.get('categoryId') || '';
+    const qStore = searchParams.get('storeId') || '';
     setSearch(qSearch);
+    setDebouncedSearch(qSearch);
     setCategory(qCat);
+    setStoreFilter(qStore);
   }, [searchParams]);
 
-  const fetchProducts = async () => {
+  // Debounce: only update debouncedSearch 350ms after user stops typing
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [search]);
+
+  const fetchProducts = async (overrideSearch?: string) => {
     setLoading(true);
     try {
       const query = new URLSearchParams();
-      if (search) query.append('search', search);
+      const s = overrideSearch !== undefined ? overrideSearch : debouncedSearch;
+      if (s) query.append('search', s);
       if (category) query.append('categoryId', category);
+      if (storeFilter) query.append('storeId', storeFilter);
       if (minPrice) query.append('minPrice', minPrice);
       if (maxPrice) query.append('maxPrice', maxPrice);
+      if (minRating) query.append('minRating', minRating);
 
       const res = await apiRequest(`/products?${query.toString()}`);
-      if (res.success) {
-        let items = res.data;
-        // Client-side rating filter simulation if selected
-        if (minRating) {
-          const rLimit = parseFloat(minRating);
-          items = items.filter((p: any) => {
-            const pRating = p.id === 'p1' ? 4.9 : p.id === 'p2' ? 4.8 : p.id === 'p3' ? 4.7 : 4.5;
-            return pRating >= rLimit;
-          });
-        }
-        setProducts(items);
-      }
+      if (res.success) setProducts(res.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -61,20 +78,11 @@ function MarketplaceContent() {
     }
   };
 
-  const fetchCategories = async () => {
-    try {
-      setCategories([
-        { id: '1', name: 'Electronics', slug: 'electronics', image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=400' },
-        { id: '2', name: 'Digital Services', slug: 'digital-services', image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=400' },
-        { id: '3', name: 'Apparel', slug: 'apparel', image: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&q=80&w=400' },
-        { id: '4', name: 'Home & Kitchen', slug: 'home-kitchen', image: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=400' }
-      ]);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
+  // Load real categories from API once
   useEffect(() => {
+    apiRequest('/categories').then(res => {
+      if (res.success && res.data?.length) setCategories(res.data);
+    }).catch(() => {});
     try {
       const saved = JSON.parse(localStorage.getItem('vendly_favorites') || '[]');
       setFavorites(saved);
@@ -94,138 +102,18 @@ function MarketplaceContent() {
     setTimeout(() => setAddedToCart(null), 2000);
   };
 
-  // Re-run search/fetch when categories, keyword, rating limits change
+  // Refetch when debounced search, category, or rating changes
   useEffect(() => {
     fetchProducts();
-    fetchCategories();
-  }, [category, search, minRating]);
+  }, [debouncedSearch, category, storeFilter, minRating]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchProducts();
+    // Cancel pending debounce and search immediately
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setDebouncedSearch(search);
   };
 
-  const seedMockStoreAndProducts = async () => {
-    setSeedLoading(true);
-    try {
-      const sellerEmail = 'seller@vendly.com';
-      let loginRes;
-      try {
-        loginRes = await apiRequest('/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({ email: sellerEmail, password: 'password123' })
-        });
-      } catch (err) {
-        await apiRequest('/auth/register', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: 'Bob Storefront',
-            email: sellerEmail,
-            password: 'password123',
-            role: 'SELLER'
-          })
-        });
-        loginRes = await apiRequest('/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({ email: sellerEmail, password: 'password123' })
-        });
-      }
-
-      const previousToken = localStorage.getItem('vendly_token');
-      localStorage.setItem('vendly_token', loginRes.data.accessToken);
-
-      let storeRes;
-      try {
-        storeRes = await apiRequest('/stores', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: 'Celo Alpha Emporium',
-            description: 'Premium Web3 physical goods and digital assets.'
-          })
-        });
-      } catch (err) {
-        storeRes = await apiRequest('/stores/my-store');
-      }
-
-      const storeId = storeRes.data.id;
-
-      const adminEmail = 'admin@vendly.com';
-      let adminLoginRes;
-      try {
-        adminLoginRes = await apiRequest('/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({ email: adminEmail, password: 'password123' })
-        });
-      } catch (err) {
-        await apiRequest('/auth/register', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: 'Chief Moderator',
-            email: adminEmail,
-            password: 'password123',
-            role: 'ADMIN'
-          })
-        });
-        adminLoginRes = await apiRequest('/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({ email: adminEmail, password: 'password123' })
-        });
-      }
-
-      localStorage.setItem('vendly_token', adminLoginRes.data.accessToken);
-      await apiRequest('/admin/approve-store', {
-        method: 'POST',
-        body: JSON.stringify({ storeId, approve: true })
-      });
-
-      localStorage.setItem('vendly_token', loginRes.data.accessToken);
-
-      const mockCategory = categories[0] || { id: '1' };
-
-      const p1 = {
-        title: 'Premium Web3 Hardware Ledger',
-        description: 'Secure, offline physical storage device supporting CELO, cUSD, and standard tokens.',
-        price: '1.5',
-        quantity: 10,
-        categoryId: mockCategory.id,
-        images: ['https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&q=80&w=400']
-      };
-
-      const p2 = {
-        title: 'Celo NFT Artwork Collection',
-        description: 'Limited edition high fidelity digital art minted directly on the Celo blockchain.',
-        price: '0.5',
-        quantity: 5,
-        categoryId: mockCategory.id,
-        images: ['https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&q=80&w=400']
-      };
-
-      const p3 = {
-        title: 'Sleek Cyber Hoodie (Special Edition)',
-        description: 'Cotton-poly blend cyber-aesthetic apparel with embroidered physical QR tag.',
-        price: '2.0',
-        quantity: 20,
-        categoryId: mockCategory.id,
-        images: ['https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&q=80&w=400']
-      };
-
-      await apiRequest('/products', { method: 'POST', body: JSON.stringify(p1) });
-      await apiRequest('/products', { method: 'POST', body: JSON.stringify(p2) });
-      await apiRequest('/products', { method: 'POST', body: JSON.stringify(p3) });
-
-      if (previousToken) {
-        localStorage.setItem('vendly_token', previousToken);
-      } else {
-        localStorage.removeItem('vendly_token');
-      }
-
-      await fetchProducts();
-    } catch (err: any) {
-      alert(`Seeding failed: ${err.message}`);
-    } finally {
-      setSeedLoading(false);
-    }
-  };
 
   return (
     <div className="flex flex-col min-h-screen bg-white text-neutral-900">
@@ -286,7 +174,7 @@ function MarketplaceContent() {
               <div className="space-y-2">
                 <h3 className="font-bold text-neutral-900 text-base">{cat.name}</h3>
                 <div className="h-32 rounded-lg overflow-hidden relative">
-                  <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
+                  <img src={getCatImage(cat.name)} alt={cat.name} className="w-full h-full object-cover" />
                 </div>
               </div>
               <button
@@ -374,7 +262,7 @@ function MarketplaceContent() {
                 />
               </div>
               <button 
-                onClick={fetchProducts}
+                onClick={() => fetchProducts()}
                 className="w-full mt-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 py-2 text-xs font-bold text-white transition-colors cursor-pointer"
               >
                 Apply Price Limit
@@ -406,23 +294,6 @@ function MarketplaceContent() {
 
           </div>
 
-          {/* Seeding block if empty database */}
-          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-6 space-y-4">
-            <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
-              <AlertCircle className="h-4 w-4" />
-              Demo Helper Panel
-            </h4>
-            <p className="text-[11px] text-neutral-600 leading-relaxed">
-              If the database contains no listings yet, click below to automatically seed mock store profiles, category tokens, and verified product listings.
-            </p>
-            <button 
-              onClick={seedMockStoreAndProducts}
-              disabled={seedLoading}
-              className="w-full rounded-lg bg-amber-500 hover:bg-amber-600 px-4 py-2 text-xs font-bold text-white transition-colors disabled:opacity-50 cursor-pointer"
-            >
-              {seedLoading ? 'Seeding Database...' : 'Seed Mock Products'}
-            </button>
-          </div>
         </aside>
 
         {/* Right side: Product Catalog Grid */}
@@ -449,7 +320,7 @@ function MarketplaceContent() {
               <ShoppingBag className="mx-auto h-12 w-12 text-neutral-300 mb-3" />
               <p className="text-base font-bold text-neutral-700">No products found</p>
               <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
-                No active listings match your filters. Try clearing your search keyword or seed mock products.
+                No active listings match your filters. Try clearing your search or adjusting the filters.
               </p>
               <button
                 onClick={() => { setSearch(''); setCategory(''); setMinPrice(''); setMaxPrice(''); setMinRating(''); }}
@@ -462,10 +333,7 @@ function MarketplaceContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {products.map((product: any) => {
                 const img = product.images?.[0]?.url || product.images?.[0]?.imageUrl || 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&q=80&w=400';
-                
-                // Simulate reviews score and USD estimation
-                const mockRating = product.id === 'p1' ? 4.9 : product.id === 'p2' ? 4.8 : product.id === 'p3' ? 4.7 : 4.5;
-                const mockSales = product.id === 'p1' ? 42 : product.id === 'p2' ? 18 : product.id === 'p3' ? 64 : 12;
+                const rating = product.rating ? parseFloat(product.rating) : null;
                 const usdEstimate = (parseFloat(product.price) * 0.70).toFixed(2);
 
                 return (
@@ -509,18 +377,20 @@ function MarketplaceContent() {
                           {product.title}
                         </h3>
 
-                        {/* Rating stars */}
-                        <div className="flex items-center gap-1.5">
-                          <div className="flex text-amber-500">
-                            {Array.from({ length: 5 }).map((_, idx) => (
-                              <Star 
-                                key={idx} 
-                                className={`h-3 w-3 ${idx < Math.floor(mockRating) ? 'fill-current' : 'text-neutral-200'}`} 
-                              />
-                            ))}
+                        {/* Rating stars — only shown if product has a real rating */}
+                        {rating !== null && (
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex text-amber-500">
+                              {Array.from({ length: 5 }).map((_, idx) => (
+                                <Star
+                                  key={idx}
+                                  className={`h-3 w-3 ${idx < Math.floor(rating) ? 'fill-current' : 'text-neutral-200'}`}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-[10px] text-neutral-500 font-bold">{rating.toFixed(1)}</span>
                           </div>
-                          <span className="text-[10px] text-neutral-500 font-bold">({mockRating} / {mockSales} sales)</span>
-                        </div>
+                        )}
 
                         <p className="text-xs text-neutral-500 line-clamp-2 leading-relaxed pt-1">
                           {product.description}
@@ -594,9 +464,9 @@ function MarketplaceContent() {
         <div className="mx-auto max-w-7xl px-4 flex flex-col sm:flex-row justify-between items-center gap-4">
           <p>© 2026 Vendly Escrow Marketplace. Built on Celo.</p>
           <div className="flex gap-4">
-            <a href="#" className="hover:underline">Terms of Service</a>
-            <a href="#" className="hover:underline">Privacy Policy</a>
-            <a href="#" className="hover:underline">Escrow Audits</a>
+            <Link href="/terms" className="hover:underline">Terms of Service</Link>
+            <Link href="/privacy" className="hover:underline">Privacy Policy</Link>
+            <Link href="/buyer-protection" className="hover:underline">Buyer Protection</Link>
           </div>
         </div>
       </footer>

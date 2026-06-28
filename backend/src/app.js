@@ -10,13 +10,17 @@ const app = express();
 const ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL,
   'http://localhost:3000',
-  'http://localhost:3001'
+  'http://localhost:3001',
+  'https://vendly-six-puce.vercel.app'
 ].filter(Boolean);
 
 // Middlewares
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    // Allow all Vercel preview deployments for this project
+    if (/^https:\/\/vendly[a-z0-9-]*\.vercel\.app$/.test(origin)) return callback(null, true);
     callback(new Error(`CORS blocked: ${origin}`));
   },
   credentials: true

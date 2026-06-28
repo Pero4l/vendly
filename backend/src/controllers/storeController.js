@@ -1,6 +1,40 @@
 const { Store, StoreProfile, User, Product, sequelize } = require('../models');
+const { Op: SeqOp } = require('sequelize');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../middlewares/auth');
+
+async function listStores(req, res, next) {
+  try {
+    const { search } = req.query;
+    const where = { status: 'active' };
+    const profileWhere = search ? { displayName: { [SeqOp.iLike]: `%${search}%` } } : {};
+    const stores = await Store.findAll({
+      where,
+      include: [{
+        model: StoreProfile,
+        as: 'storeProfile',
+        where: Object.keys(profileWhere).length ? profileWhere : undefined,
+        required: !!search,
+        attributes: ['displayName', 'description', 'logo', 'rating', 'totalProducts', 'totalSales']
+      }],
+      order: [['createdAt', 'DESC']],
+      limit: 20
+    });
+    const data = stores.map(s => ({
+      id: s.id,
+      name: s.name,
+      slug: s.slug,
+      description: s.storeProfile?.description,
+      logo: s.storeProfile?.logo,
+      rating: s.storeProfile?.rating,
+      totalProducts: s.storeProfile?.totalProducts,
+      totalSales: s.storeProfile?.totalSales
+    }));
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
 
 async function generateUniqueStoreSlug(name) {
   let slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'store';
@@ -150,4 +184,4 @@ async function updateStore(req, res, next) {
   }
 }
 
-module.exports = { applyVendor, getStore, updateStore };
+module.exports = { listStores, applyVendor, getStore, updateStore };

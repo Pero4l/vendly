@@ -34,12 +34,6 @@ function stageIndex(status: string) {
   return 0;
 }
 
-const MOCK_ORDERS = [
-  { id: 'ord_001', status: 'shipped', totalAmount: '1.5', createdAt: new Date(Date.now()-86400000*2).toISOString(), items: [{ product: { title: 'Premium Web3 Hardware Ledger', images: [{ url: 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&q=80&w=200' }] } }] },
-  { id: 'ord_002', status: 'paid', totalAmount: '0.5', createdAt: new Date(Date.now()-86400000).toISOString(), items: [{ product: { title: 'Celo NFT Artwork Collection', images: [] } }] },
-  { id: 'ord_003', status: 'delivered', totalAmount: '2.0', createdAt: new Date(Date.now()-86400000*5).toISOString(), items: [{ product: { title: 'Sleek Cyber Hoodie (Special Edition)', images: [] } }] },
-];
-
 function OrdersContent() {
   const searchParams = useSearchParams();
   const justOrdered = searchParams.get('success') === '1';
@@ -52,18 +46,24 @@ function OrdersContent() {
   useEffect(() => {
     apiRequest('/orders')
       .then(res => {
-        const data = res.success && Array.isArray(res.data) && res.data.length ? res.data : MOCK_ORDERS;
+        const data = res.success && Array.isArray(res.data) ? res.data : [];
         setOrders(data);
         setFiltered(data);
       })
-      .catch(() => { setOrders(MOCK_ORDERS); setFiltered(MOCK_ORDERS); })
+      .catch(() => { setOrders([]); setFiltered([]); })
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     let result = orders;
     if (activeTab !== 'All') result = result.filter(o => o.status === activeTab);
-    if (search.trim()) result = result.filter(o => o.id.includes(search) || o.product?.title?.toLowerCase().includes(search.toLowerCase()));
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(o =>
+        (o.orderNumber || o.id || '').toLowerCase().includes(q) ||
+        o.items?.[0]?.product?.title?.toLowerCase().includes(q)
+      );
+    }
     setFiltered(result);
   }, [activeTab, search, orders]);
 

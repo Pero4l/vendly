@@ -10,11 +10,23 @@ import { useCart } from '../context/CartContext';
 export default function MobileTopBar() {
   const pathname = usePathname();
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { totalItems } = useCart();
 
-  // Re-read user on every navigation (layout stays mounted in App Router)
   useEffect(() => {
     setCurrentUser(getUser());
+  }, [pathname]);
+
+  // Fetch unread notification count when user is logged in
+  useEffect(() => {
+    if (!getUser()) return;
+    import('../utils/api').then(({ apiRequest }) => {
+      apiRequest('/notifications').then(res => {
+        if (res.success && Array.isArray(res.data)) {
+          setUnreadCount(res.data.filter((n: any) => !n.isRead && !n.read).length);
+        }
+      }).catch(() => {});
+    });
   }, [pathname]);
 
   return (
@@ -43,7 +55,9 @@ export default function MobileTopBar() {
               {/* Notifications — only when logged in */}
               <Link href="/notifications" className="relative p-2 rounded-full hover:bg-neutral-100 transition-colors">
                 <Bell className="h-5 w-5 text-neutral-600" />
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-amber-500 rounded-full" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-amber-500 rounded-full" />
+                )}
               </Link>
 
               {/* User avatar */}
