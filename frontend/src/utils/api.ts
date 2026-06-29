@@ -30,7 +30,10 @@ export function getToken() {
   return null;
 }
 export function saveUser(user: any) {
-  if (typeof window !== 'undefined') localStorage.setItem('vendly_user', JSON.stringify(user));
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('vendly_user', JSON.stringify(user));
+    window.dispatchEvent(new StorageEvent('storage', { key: 'vendly_user' }));
+  }
 }
 export function getUser() {
   if (typeof window === 'undefined') return null;
@@ -38,7 +41,10 @@ export function getUser() {
   return u ? JSON.parse(u) : null;
 }
 export function removeUser() {
-  if (typeof window !== 'undefined') localStorage.removeItem('vendly_user');
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('vendly_user');
+    window.dispatchEvent(new StorageEvent('storage', { key: 'vendly_user' }));
+  }
 }
 
 export function getProductImage(images: any, fallback = ''): string {

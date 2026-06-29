@@ -120,28 +120,31 @@ async function confirmPayment(req, res, next) {
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
     if (order.buyerId !== req.user.id) return res.status(403).json({ success: false, message: 'Unauthorized' });
 
-    await order.update({ status: 'paid', txHash: txHash || null });
+    await order.update({ status: 'paid' });
 
-    // Lock funds on-chain now that buyer has confirmed payment
+    // Lock funds on-chain using the buyer's custodial wallet
     let onChainTxHash = txHash || null;
     if (order.escrow) {
       try {
-        const sellerWallet = await Wallet.findOne({ where: { userId: order.escrow.sellerId } });
-        const buyerWallet  = await Wallet.findOne({ where: { userId: order.buyerId } });
-        if (sellerWallet && buyerWallet) {
+        const [buyerWallet, sellerWallet] = await Promise.all([
+          Wallet.findOne({ where: { userId: order.buyerId } }),
+          Wallet.findOne({ where: { userId: order.escrow.sellerId } }),
+        ]);
+        if (buyerWallet && sellerWallet) {
           const buyerPrivateKey = decrypt(buyerWallet.encryptedPrivateKey);
           onChainTxHash = await celoService.lockEscrowFunds(
             order.id,
             buyerWallet.address,
             sellerWallet.address,
             'CELO',
-            order.totalAmount
+            order.totalAmount,
+            buyerPrivateKey
           );
+          await order.escrow.update({ contractTxHash: onChainTxHash });
         }
       } catch (escrowErr) {
         console.error('[Escrow] lockFunds failed:', escrowErr.message);
       }
-      await order.escrow.update({ status: 'LOCKED' });
     }
 
     try {

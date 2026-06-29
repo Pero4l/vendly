@@ -100,18 +100,18 @@ export default function CheckoutPage() {
       if (!orderRes.success) throw new Error(orderRes.message || 'Failed to place order');
 
       const orderId = orderRes.data.id;
-      setStage('Locking payment in escrow...');
 
-      // Small delay to show the escrow stage to the user
-      await new Promise(r => setTimeout(r, 900));
+      // Clear cart immediately — the order exists, no reason to keep it
+      clearCart();
+
+      setStage('Locking payment in escrow...');
 
       await apiRequest('/orders/confirm-payment', {
         method: 'POST',
         body: JSON.stringify({ orderId, txHash: null })
       });
 
-      setStage('Success! Redirecting...');
-      clearCart();
+      setStage('Order placed! Redirecting...');
       setTimeout(() => router.push('/orders?success=1'), 800);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');

@@ -157,27 +157,70 @@ function isEscrowDeployed() {
  * Locks the buyer's funds in the escrow contract.
  * tokenSymbol: 'CELO' | 'cUSD' | 'USDT' | 'USDC'
  */
-async function lockEscrowFunds(orderId, buyerAddress, sellerAddress, tokenSymbol, amount) {
+/**
+ * Locks buyer's funds in the escrow contract.
+ *
+ * The contract is onlyAdmin — only the admin wallet can call lockFunds.
+ * In our custodial model the flow is:
+ *   1. Buyer wallet → admin wallet  (buyer's funds are debited)
+ *   2. Admin wallet → escrow contract via lockFunds  (funds are locked on-chain)
+ *
+ * For ERC-20:
+ *   1. Buyer wallet transfers tokens to admin wallet
+ *   2. Admin wallet approves escrow contract
+ *   3. Admin wallet calls lockFunds (contract pulls from admin)
+ */
+async function lockEscrowFunds(orderId, buyerAddress, sellerAddress, tokenSymbol, amount, buyerPrivateKey) {
   if (!isEscrowDeployed()) {
     console.warn('[Escrow] Contract not deployed — skipping lockFunds');
     return MOCK_TX;
   }
 
-  const contract = getEscrowContract();
+  if (!buyerPrivateKey) throw new Error('Buyer private key required to lock escrow funds');
+
+  const amountWei = ethers.parseEther(amount.toString());
+  const adminWallet = getAdminWallet();
+  const buyerWallet = new ethers.Wallet(buyerPrivateKey, getProvider());
   const orderIdBytes = ethers.id(orderId);
   const tokenAddress = TOKENS[tokenSymbol] ?? ethers.ZeroAddress;
-  const amountWei = ethers.parseEther(amount.toString());
 
-  let tx;
   if (tokenSymbol === 'CELO') {
-    tx = await contract.lockFunds(orderIdBytes, buyerAddress, sellerAddress, tokenAddress, amountWei, { value: amountWei });
-  } else {
-    // For ERC-20 the admin wallet must have approved the contract first
-    tx = await contract.lockFunds(orderIdBytes, buyerAddress, sellerAddress, tokenAddress, amountWei);
-  }
+    // Step 1: Buyer sends CELO to admin wallet (debit buyer)
+    const transferTx = await buyerWallet.sendTransaction({
+      to: adminWallet.address,
+      value: amountWei
+    });
+    await transferTx.wait();
 
-  const receipt = await tx.wait();
-  return receipt.hash;
+    // Step 2: Admin locks it in the escrow contract (admin sends that CELO to contract)
+    const contract = getEscrowContract();
+    const lockTx = await contract.lockFunds(
+      orderIdBytes, buyerAddress, sellerAddress, tokenAddress, amountWei,
+      { value: amountWei }
+    );
+    const receipt = await lockTx.wait();
+    return receipt.hash;
+  } else {
+    // ERC-20
+    const erc20Buyer = new ethers.Contract(tokenAddress, ERC20_ABI, buyerWallet);
+    const erc20Admin = new ethers.Contract(tokenAddress, ERC20_ABI, adminWallet);
+
+    // Step 1: Buyer transfers tokens to admin wallet
+    const transferTx = await erc20Buyer.transfer(adminWallet.address, amountWei);
+    await transferTx.wait();
+
+    // Step 2: Admin approves escrow contract to pull those tokens
+    const approveTx = await erc20Admin.approve(ESCROW_CONTRACT_ADDRESS, amountWei);
+    await approveTx.wait();
+
+    // Step 3: Admin calls lockFunds — contract pulls tokens from admin
+    const contract = getEscrowContract();
+    const lockTx = await contract.lockFunds(
+      orderIdBytes, buyerAddress, sellerAddress, tokenAddress, amountWei
+    );
+    const receipt = await lockTx.wait();
+    return receipt.hash;
+  }
 }
 
 /**

@@ -497,7 +497,7 @@ export default function AdminPanel() {
                             <p className="text-[10px] text-neutral-400">Stage {o.escrow.stage}/3 · {o.escrow.status}</p>
                           )}
                         </div>
-                        {o.status === 'pending' && (
+                        {o.escrow && ['paid', 'processing', 'shipped', 'delivered'].includes(o.status) && (
                           <div className="flex gap-1.5">
                             {[1, 2, 3].map(stage => (
                               <button key={stage}
@@ -547,8 +547,8 @@ export default function AdminPanel() {
                     <p className="text-neutral-700 leading-relaxed">"{dispute.reason}"</p>
                   </div>
                   <div className="bg-neutral-50 rounded-xl p-3 space-y-1.5 text-neutral-600">
-                    <p><span className="font-bold text-neutral-400">Buyer:</span> {dispute.order?.user?.email}</p>
-                    <p><span className="font-bold text-neutral-400">Seller:</span> {dispute.order?.store?.name}</p>
+                    <p><span className="font-bold text-neutral-400">Buyer:</span> {dispute.order?.buyer?.email || dispute.order?.buyer?.fullName || '—'}</p>
+                    <p><span className="font-bold text-neutral-400">Order #:</span> {dispute.order?.orderNumber || dispute.orderId?.slice(0, 8)}</p>
                     <p><span className="font-bold text-neutral-400">Order:</span> {dispute.orderId?.slice(0, 12)}…</p>
                   </div>
                 </div>
