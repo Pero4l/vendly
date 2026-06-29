@@ -5,6 +5,7 @@ import Header from '../../components/Header';
 import { apiRequest } from '../../utils/api';
 import { ShoppingBag, Search, Sparkles, Filter, ShieldCheck, ArrowRight, Star, RefreshCw, ShoppingCart, Heart } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import { useCart } from '../../context/CartContext';
 
@@ -167,10 +168,12 @@ function MarketplaceContent() {
       <section className="relative bg-neutral-900 overflow-hidden py-12 md:py-20 px-6 sm:px-12 lg:px-20 border-b border-neutral-200">
         {/* Background visual graphics */}
         <div className="absolute right-0 bottom-0 top-0 w-1/2 opacity-25 hidden md:block">
-          <img 
-            src="https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&q=80&w=800" 
-            alt="Web3 secure tech background" 
-            className="w-full h-full object-cover grayscale brightness-50"
+          <Image
+            src="https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&q=80&w=800"
+            alt="Web3 secure tech background"
+            fill
+            className="object-cover grayscale brightness-50"
+            priority
           />
           <div className="absolute inset-0 bg-gradient-to-r from-neutral-900 to-transparent" />
         </div>
@@ -237,10 +240,12 @@ function MarketplaceContent() {
                     ${active ? 'ring-2 ring-amber-500 shadow-md' : 'hover:shadow-md hover:-translate-y-0.5'}`}
                 >
                   <div className="h-30 sm:h-16 relative">
-                    <img
+                    <Image
                       src={imgSrc}
                       alt={cat.name}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                      fill
+                      className="object-cover transition-transform duration-300 group-hover:scale-110"
+                      sizes="120px"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-neutral-950/80 via-neutral-950/10 to-transparent" />
                     {active && (
@@ -404,7 +409,7 @@ function MarketplaceContent() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {products.map((product: any) => {
+              {products.map((product: any, idx: number) => {
                 const img = product.images?.[0]?.url || product.images?.[0]?.imageUrl || 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&q=80&w=400';
                 const rating = product.averageRating ? parseFloat(product.averageRating) : null;
                 const usdEstimate = (parseFloat(product.price) * 0.70).toFixed(2);
@@ -417,10 +422,13 @@ function MarketplaceContent() {
                   >
                     {/* Top image wrapper */}
                     <div className="relative h-48 bg-neutral-100 overflow-hidden">
-                      <img
+                      <Image
                         src={img}
                         alt={product.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        fill
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        priority={idx < 6}
                       />
                       <span className="absolute top-3 right-3 rounded-full bg-neutral-900/90 px-3 py-1 text-xs font-black text-amber-400 tracking-wider">
                         {product.price} CELO
