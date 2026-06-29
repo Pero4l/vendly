@@ -15,5 +15,6 @@ router.post('/set-fee', adminController.setPlatformFee);
 router.get('/analytics', adminController.getAnalytics);
 router.get('/users', adminController.listUsers);
 router.post('/airdrop', adminController.airdropTestTokens);
+router.get('/orders', adminController.listOrders);
 
 module.exports = router;

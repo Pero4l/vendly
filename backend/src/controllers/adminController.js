@@ -1,9 +1,13 @@
 const { User, Store, StoreProfile, Order, Escrow, AdminAction, Setting, Wallet, sequelize } = require('../models');
-const jwt = require('jsonwebtoken');
-const { JWT_SECRET } = require('../middlewares/auth');
 const celoService = require('../blockchain/celoService');
 const { decrypt } = require('../utils/encryption');
 const notificationService = require('../services/notificationService');
+
+function logAction(adminId, action, targetType, targetId, notes) {
+  return AdminAction.create({ adminId, action, targetType, targetId, notes }).catch(err => {
+    console.error('[AdminAction] Failed to log action:', err.message);
+  });
+}
 
 async function listPendingStores(req, res, next) {
   try {
@@ -53,15 +57,10 @@ async function approveStore(req, res, next) {
     await store.update({ status: newStatus });
 
     const owner = store.storeProfile?.user;
-    if (approve && owner) {
-      await owner.update({ role: 'seller' });
-    }
+    if (approve && owner) await owner.update({ role: 'seller' });
 
-    await AdminAction.create({
-      adminId: req.user.id,
-      actionType: 'SELLER_APPROVE',
-      details: `Store "${store.name}" (${storeId}) ${approve ? 'approved' : 'rejected'} by admin`
-    });
+    await logAction(req.user.id, approve ? 'STORE_APPROVE' : 'STORE_REJECT', 'store', storeId,
+      `Store "${store.name}" ${approve ? 'approved' : 'rejected'}`);
 
     if (owner) {
       try {
@@ -97,11 +96,8 @@ async function suspendUser(req, res, next) {
     user.status = suspend ? 'suspended' : 'active';
     await user.save();
 
-    await AdminAction.create({
-      adminId: req.user.id,
-      actionType: 'USER_SUSPEND',
-      details: `User ${user.email} (${userId}) status set to ${user.status}`
-    });
+    await logAction(req.user.id, suspend ? 'USER_SUSPEND' : 'USER_UNSUSPEND', 'user', userId,
+      `User ${user.email} status set to ${user.status}`);
 
     res.status(200).json({ success: true, message: `User status set to ${user.status}` });
   } catch (error) {
@@ -140,7 +136,6 @@ async function releaseEscrowStage(req, res, next) {
     if (stage === 3) escrowRecord.status = 'released';
     await escrowRecord.save();
 
-    // Auto-withdraw approved funds to seller's custodial wallet
     let withdrawTxHash = null;
     try {
       const sellerWallet = await Wallet.findOne({ where: { userId: escrowRecord.sellerId } });
@@ -149,15 +144,11 @@ async function releaseEscrowStage(req, res, next) {
         withdrawTxHash = await celoService.triggerSellerWithdraw(order.id, sellerPrivateKey);
       }
     } catch (withdrawErr) {
-      // Log but don't fail the stage approval — seller can withdraw manually later
       console.error(`[Escrow] Auto-withdraw failed for order ${orderId}:`, withdrawErr.message);
     }
 
-    await AdminAction.create({
-      adminId: req.user.id,
-      actionType: 'ESCROW_RELEASE',
-      details: `Released escrow stage ${stage} for order ${orderId}, approve tx: ${txHash}, withdraw tx: ${withdrawTxHash || 'pending'}`
-    });
+    await logAction(req.user.id, 'ESCROW_RELEASE', 'order', orderId,
+      `Stage ${stage} released. approveTx: ${txHash}, withdrawTx: ${withdrawTxHash || 'pending'}`);
 
     res.status(200).json({ success: true, message: `Escrow Stage ${stage} released`, txHash, withdrawTxHash });
   } catch (error) {
@@ -212,11 +203,8 @@ async function airdropTestTokens(req, res, next) {
       }
     }
 
-    await AdminAction.create({
-      adminId: req.user.id,
-      actionType: 'AIRDROP',
-      details: `Airdropped 100 of each token to userId ${userId} (${wallet.address})`
-    });
+    await logAction(req.user.id, 'AIRDROP', 'user', userId,
+      `Airdropped 100 of each token to ${wallet.address}`);
 
     res.status(200).json({ success: true, message: 'Airdrop sent', data: { address: wallet.address, results } });
   } catch (error) {
@@ -231,19 +219,16 @@ async function setPlatformFee(req, res, next) {
 
     const [setting, created] = await Setting.findOrCreate({
       where: { key: 'platform_fee_basis_points' },
-      defaults: { value: feeBps.toString() }
+      defaults: { value: String(feeBps) }
     });
 
     if (!created) {
-      setting.value = feeBps.toString();
+      setting.value = String(feeBps);
       await setting.save();
     }
 
-    await AdminAction.create({
-      adminId: req.user.id,
-      actionType: 'SETTINGS_UPDATE',
-      details: `Platform fee set to ${feeBps} bps`
-    });
+    await logAction(req.user.id, 'SETTINGS_UPDATE', 'setting', req.user.id,
+      `Platform fee set to ${feeBps} bps`);
 
     res.status(200).json({ success: true, message: 'Platform fee updated successfully', data: feeBps });
   } catch (error) {
@@ -253,18 +238,36 @@ async function setPlatformFee(req, res, next) {
 
 async function getAnalytics(req, res, next) {
   try {
-    const [totalUsers, totalStores, totalOrders, pendingStores, revenueRaw] = await Promise.all([
+    const [totalUsers, totalStores, totalOrders, pendingStores, revenueRaw, totalDisputes] = await Promise.all([
       User.count(),
       Store.count({ where: { status: 'active' } }),
       Order.count(),
       Store.count({ where: { status: 'pending' } }),
-      Order.sum('totalAmount', { where: { status: 'completed' } })
+      Order.sum('totalAmount', { where: { status: 'completed' } }),
+      Order.count({ where: { status: 'disputed' } }).catch(() => 0)
     ]);
 
     res.status(200).json({
       success: true,
-      data: { totalUsers, totalStores, totalOrders, pendingStores, revenue: revenueRaw || 0 }
+      data: { totalUsers, totalStores, totalOrders, pendingStores, revenue: revenueRaw || 0, totalDisputes }
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function listOrders(req, res, next) {
+  try {
+    const orders = await Order.findAll({
+      include: [
+        { model: User, as: 'user', attributes: ['id', 'email', 'fullName', 'username'] },
+        { model: Store, as: 'store', attributes: ['id', 'name'] },
+        { model: Escrow, as: 'escrow', attributes: ['id', 'status', 'stage', 'totalAmount', 'releasedAmount'] }
+      ],
+      order: [['createdAt', 'DESC']],
+      limit: 100
+    });
+    res.status(200).json({ success: true, data: orders });
   } catch (error) {
     next(error);
   }
@@ -278,5 +281,6 @@ module.exports = {
   setPlatformFee,
   getAnalytics,
   listUsers,
-  airdropTestTokens
+  airdropTestTokens,
+  listOrders
 };
