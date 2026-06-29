@@ -213,8 +213,8 @@ export default function Home() {
                     <ShieldCheck className="h-5.5 w-5.5 text-amber-400" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-black text-white leading-tight">Escrow Active</h4>
-                    <p className="text-[10px] text-neutral-450 mt-0.5 font-medium">Secured on Celo Smart Contract</p>
+                    <h4 className="text-xs font-black text-gray-500 leading-tight">Escrow Active</h4>
+                    <p className="text-[10px] text-gray-300 mt-0.5 font-medium">Secured on Celo Smart Contract</p>
                   </div>
                 </div>
                 <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
