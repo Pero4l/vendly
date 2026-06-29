@@ -420,8 +420,10 @@ async function registerAdmin({ fullName, email, password, username, adminSecretK
     throw new Error('fullName, email, password, and username are required');
   }
 
-  if (!/^[a-z0-9_]{3,30}$/.test(username)) {
-    throw new Error('Username must be 3–30 characters: lowercase letters, numbers, and underscores only');
+  const trimmedUsername = username.trim().toLowerCase();
+
+  if (!/^[a-z0-9_]{4,10}$/.test(trimmedUsername)) {
+    throw new Error('Username must be 4–10 characters: lowercase letters, numbers, and underscores only');
   }
 
   const [emailExists, usernameExists] = await Promise.all([
