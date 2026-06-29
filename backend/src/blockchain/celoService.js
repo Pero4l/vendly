@@ -1,12 +1,13 @@
 const { ethers } = require('ethers');
 require('dotenv').config();
 
-// Token addresses on Celo Alfajores Testnet
+// Token addresses on Celo Sepolia Testnet
+// cUSD/USDT/USDC addresses differ per network — set via env vars in production
 const TOKENS = {
   CELO: ethers.ZeroAddress,
-  cUSD: process.env.CUSD_ADDRESS || '0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1',
-  USDT: process.env.USDT_ADDRESS || '0xe285ae699274f99090450b30ae585cd57ee2222b', // Mock/Standard
-  USDC: process.env.USDC_ADDRESS || '0x2f37586574602f902d8f572a805c6d3d4b684534'  // Mock/Standard
+  cUSD: process.env.CUSD_ADDRESS  || ethers.ZeroAddress,
+  USDT: process.env.USDT_ADDRESS  || ethers.ZeroAddress,
+  USDC: process.env.USDC_ADDRESS  || ethers.ZeroAddress
 };
 
 // ABIs
@@ -38,7 +39,7 @@ const ESCROW_ABI = [
   'function admin() external view returns (address)'
 ];
 
-const PROVIDER_URL = process.env.CELO_PROVIDER_URL || 'https://alfajores-forno.celo-testnet.org';
+const PROVIDER_URL = process.env.CELO_PROVIDER_URL || 'https://celo-sepolia.g.alchemy.com/v2/IT28dkgGdoaFjLobFalF_';
 const ESCROW_CONTRACT_ADDRESS = process.env.ESCROW_CONTRACT_ADDRESS || ethers.ZeroAddress;
 
 // All blockchain objects are lazy — created on first use, not at module load.
@@ -49,7 +50,7 @@ let _escrowContract = null;
 
 function getProvider() {
   if (_provider) return _provider;
-  _provider = new ethers.JsonRpcProvider(PROVIDER_URL, { chainId: 44787, name: 'celo-alfajores' });
+  _provider = new ethers.JsonRpcProvider(PROVIDER_URL, { chainId: 11142220, name: 'celo-sepolia' });
   return _provider;
 }
 
@@ -235,6 +236,25 @@ async function triggerDisputeResolve(orderId, sellerShare) {
 }
 
 /**
+ * Seller (or admin on their behalf) withdraws all approved-but-unclaimed funds for an order.
+ * Since Vendly uses custodial wallets, the admin signs this transaction using the seller's
+ * stored private key so the seller doesn't need to interact with the chain directly.
+ */
+async function triggerSellerWithdraw(orderId, sellerPrivateKey) {
+  if (!isEscrowDeployed()) {
+    console.warn('[Escrow] Contract not deployed — skipping sellerWithdraw');
+    return MOCK_TX;
+  }
+
+  const sellerWallet = new ethers.Wallet(sellerPrivateKey, getProvider());
+  const contract = new ethers.Contract(ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, sellerWallet);
+  const orderIdBytes = ethers.id(orderId);
+  const tx = await contract.sellerWithdraw(orderIdBytes);
+  const receipt = await tx.wait();
+  return receipt.hash;
+}
+
+/**
  * Returns how much a seller can currently withdraw for a given order.
  */
 async function getSellerClaimable(orderId) {
@@ -252,6 +272,7 @@ module.exports = {
   transferTokens,
   lockEscrowFunds,
   triggerEscrowRelease,
+  triggerSellerWithdraw,
   triggerEscrowRefund,
   triggerDisputeResolve,
   getSellerClaimable

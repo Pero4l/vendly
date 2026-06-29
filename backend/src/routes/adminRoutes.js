@@ -13,5 +13,7 @@ router.post('/suspend-user', adminController.suspendUser);
 router.post('/release-escrow', adminController.releaseEscrowStage);
 router.post('/set-fee', adminController.setPlatformFee);
 router.get('/analytics', adminController.getAnalytics);
+router.get('/users', adminController.listUsers);
+router.post('/airdrop', adminController.airdropTestTokens);
 
 module.exports = router;

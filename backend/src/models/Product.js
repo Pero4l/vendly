@@ -80,6 +80,11 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 0,
       allowNull: false
     },
+    quality: {
+      type: DataTypes.ENUM('new', 'neatly_used', 'old_used'),
+      allowNull: true,
+      defaultValue: null
+    },
     status: {
       type: DataTypes.ENUM('draft', 'active', 'out_of_stock', 'suspended', 'deleted'),
       defaultValue: 'draft',

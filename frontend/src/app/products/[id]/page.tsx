@@ -238,6 +238,15 @@ export default function ProductDetails() {
                 <span className="bg-amber-100 px-2.5 py-1 rounded text-xs font-bold text-amber-800">
                   {product.category?.name}
                 </span>
+                {product.quality && (
+                  <span className={`px-2.5 py-1 rounded text-xs font-bold ${
+                    product.quality === 'new'         ? 'bg-emerald-100 text-emerald-800' :
+                    product.quality === 'neatly_used' ? 'bg-blue-100 text-blue-800' :
+                                                        'bg-neutral-100 text-neutral-700'
+                  }`}>
+                    {product.quality === 'new' ? 'New' : product.quality === 'neatly_used' ? 'Neatly Used' : 'Old Used'}
+                  </span>
+                )}
                 <span className="bg-neutral-100 px-2.5 py-1 rounded text-xs font-bold text-neutral-700">
                   SKU: P-{product.id.toUpperCase()}
                 </span>

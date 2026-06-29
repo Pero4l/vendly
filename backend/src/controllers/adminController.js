@@ -1,7 +1,8 @@
-const { User, Store, StoreProfile, Order, Escrow, AdminAction, Setting, sequelize } = require('../models');
+const { User, Store, StoreProfile, Order, Escrow, AdminAction, Setting, Wallet, sequelize } = require('../models');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../middlewares/auth');
 const celoService = require('../blockchain/celoService');
+const { decrypt } = require('../utils/encryption');
 const notificationService = require('../services/notificationService');
 
 async function listPendingStores(req, res, next) {
@@ -139,15 +140,87 @@ async function releaseEscrowStage(req, res, next) {
     if (stage === 3) escrowRecord.status = 'released';
     await escrowRecord.save();
 
+    // Auto-withdraw approved funds to seller's custodial wallet
+    let withdrawTxHash = null;
+    try {
+      const sellerWallet = await Wallet.findOne({ where: { userId: escrowRecord.sellerId } });
+      if (sellerWallet) {
+        const sellerPrivateKey = decrypt(sellerWallet.encryptedPrivateKey);
+        withdrawTxHash = await celoService.triggerSellerWithdraw(order.id, sellerPrivateKey);
+      }
+    } catch (withdrawErr) {
+      // Log but don't fail the stage approval — seller can withdraw manually later
+      console.error(`[Escrow] Auto-withdraw failed for order ${orderId}:`, withdrawErr.message);
+    }
+
     await AdminAction.create({
       adminId: req.user.id,
       actionType: 'ESCROW_RELEASE',
-      details: `Released escrow stage ${stage} for order ${orderId}, tx: ${txHash}`
+      details: `Released escrow stage ${stage} for order ${orderId}, approve tx: ${txHash}, withdraw tx: ${withdrawTxHash || 'pending'}`
     });
 
-    res.status(200).json({ success: true, message: `Escrow Stage ${stage} released`, txHash });
+    res.status(200).json({ success: true, message: `Escrow Stage ${stage} released`, txHash, withdrawTxHash });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
+  }
+}
+
+async function listUsers(req, res, next) {
+  try {
+    const users = await User.findAll({
+      attributes: ['id', 'fullName', 'username', 'email', 'role', 'status', 'createdAt'],
+      order: [['createdAt', 'DESC']]
+    });
+
+    const wallets = await Wallet.findAll({ attributes: ['userId', 'address'] });
+    const walletMap = Object.fromEntries(wallets.map(w => [w.userId, w.address]));
+
+    const data = users.map(u => ({
+      id: u.id,
+      fullName: u.fullName,
+      username: u.username,
+      email: u.email,
+      role: u.role,
+      status: u.status,
+      createdAt: u.createdAt,
+      walletAddress: walletMap[u.id] || null
+    }));
+
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function airdropTestTokens(req, res, next) {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, message: 'userId required' });
+
+    const wallet = await Wallet.findOne({ where: { userId } });
+    if (!wallet) return res.status(404).json({ success: false, message: 'User has no wallet yet' });
+
+    const adminKey = process.env.ADMIN_PRIVATE_KEY;
+    const results = {};
+
+    for (const token of ['CELO', 'cUSD', 'USDC', 'USDT']) {
+      try {
+        const txHash = await celoService.transferTokens(adminKey, wallet.address, token, '100');
+        results[token] = { success: true, txHash };
+      } catch (err) {
+        results[token] = { success: false, error: err.message };
+      }
+    }
+
+    await AdminAction.create({
+      adminId: req.user.id,
+      actionType: 'AIRDROP',
+      details: `Airdropped 100 of each token to userId ${userId} (${wallet.address})`
+    });
+
+    res.status(200).json({ success: true, message: 'Airdrop sent', data: { address: wallet.address, results } });
+  } catch (error) {
+    next(error);
   }
 }
 
@@ -203,5 +276,7 @@ module.exports = {
   suspendUser,
   releaseEscrowStage,
   setPlatformFee,
-  getAnalytics
+  getAnalytics,
+  listUsers,
+  airdropTestTokens
 };

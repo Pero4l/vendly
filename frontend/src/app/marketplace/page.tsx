@@ -446,9 +446,20 @@ function MarketplaceContent() {
                           </span>
                         </div>
 
-                        <h3 className="font-extrabold text-neutral-900 text-sm leading-snug group-hover:text-amber-500 transition-colors line-clamp-1">
-                          {product.title}
-                        </h3>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3 className="font-extrabold text-neutral-900 text-sm leading-snug group-hover:text-amber-500 transition-colors line-clamp-1">
+                            {product.title}
+                          </h3>
+                          {product.quality && (
+                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black ${
+                              product.quality === 'new'         ? 'bg-emerald-100 text-emerald-700' :
+                              product.quality === 'neatly_used' ? 'bg-blue-100 text-blue-700' :
+                                                                  'bg-neutral-100 text-neutral-600'
+                            }`}>
+                              {product.quality === 'new' ? 'New' : product.quality === 'neatly_used' ? 'Neatly Used' : 'Old Used'}
+                            </span>
+                          )}
+                        </div>
 
                         {/* Rating stars — only shown if product has a real rating */}
                         {rating !== null && (

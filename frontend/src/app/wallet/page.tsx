@@ -185,7 +185,7 @@ export default function WalletPage() {
             {modal === 'deposit' ? (
               <div className="space-y-4">
                 <p className="text-xs text-neutral-500 leading-relaxed">
-                  Send any supported asset to your Vendly wallet address below. Deposits are confirmed after 1 block on Celo Alfajores.
+                  Send any supported asset to your Vendly wallet address below. Deposits are confirmed after 1 block on Celo Sepolia.
                 </p>
                 <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4 space-y-2">
                   <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Your Vendly Wallet Address</p>
@@ -199,7 +199,7 @@ export default function WalletPage() {
                   </button>
                 </div>
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-700 font-medium">
-                  ⚠️ Only send CELO, cUSD, USDT, or USDC to this address on the Celo network.
+                  ⚠️ Only send CELO to this address on the <strong>Celo Sepolia</strong> testnet (chain ID 11142220).
                 </div>
               </div>
             ) : (
@@ -300,7 +300,7 @@ export default function WalletPage() {
               <div className="flex flex-col items-start sm:items-end gap-2">
                 <div className="flex items-center gap-1.5 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-1.5">
                   <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Celo Alfajores Testnet</span>
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Celo Sepolia Testnet</span>
                 </div>
                 <div className="space-y-0.5">
                   <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-wider">Wallet Address</p>
@@ -432,7 +432,7 @@ export default function WalletPage() {
                       </div>
                       {tx.txHash && (
                         <a
-                          href={`https://alfajores.celoscan.io/tx/${tx.txHash}`}
+                          href={`https://celo-sepolia.blockscout.com/tx/${tx.txHash}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-0.5 text-[10px] text-amber-600 hover:text-amber-700 font-bold"

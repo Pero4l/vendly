@@ -25,7 +25,7 @@ function normaliseImages(images) {
 
 async function createProduct(req, res, next) {
   try {
-    const { title, description, price, quantity, categoryId, images } = req.body;
+    const { title, description, price, quantity, categoryId, images, quality } = req.body;
     if (!title || !price) {
       return res.status(400).json({ success: false, message: 'title and price are required' });
     }
@@ -48,6 +48,7 @@ async function createProduct(req, res, next) {
     }
 
     const slug = await generateUniqueProductSlug(title);
+    const VALID_QUALITIES = ['new', 'neatly_used', 'old_used'];
     const product = await Product.create({
       storeId: store.id,
       categoryId: resolvedCategoryId,
@@ -57,6 +58,7 @@ async function createProduct(req, res, next) {
       quantity: quantity !== undefined ? parseInt(quantity) : 0,
       images: normaliseImages(images),
       slug,
+      quality: VALID_QUALITIES.includes(quality) ? quality : null,
       status: 'active'
     });
 
@@ -118,7 +120,7 @@ async function getProductDetails(req, res, next) {
 
 async function updateProduct(req, res, next) {
   try {
-    const { title, description, price, quantity, status, categoryId, images } = req.body;
+    const { title, description, price, quantity, status, categoryId, images, quality } = req.body;
     const product = await Product.findByPk(req.params.id, {
       include: [{ model: Store, as: 'store', include: [{ model: StoreProfile, as: 'storeProfile', attributes: ['userId'] }] }]
     });
@@ -127,6 +129,7 @@ async function updateProduct(req, res, next) {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
+    const VALID_QUALITIES = ['new', 'neatly_used', 'old_used'];
     await product.update({
       title: title || product.title,
       description: description !== undefined ? description : product.description,
@@ -134,6 +137,7 @@ async function updateProduct(req, res, next) {
       quantity: quantity !== undefined ? parseInt(quantity) : product.quantity,
       categoryId: categoryId || product.categoryId,
       images: images !== undefined ? normaliseImages(images) : product.images,
+      quality: quality !== undefined ? (VALID_QUALITIES.includes(quality) ? quality : null) : product.quality,
       status: status || product.status
     });
 

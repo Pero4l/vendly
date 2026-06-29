@@ -7,11 +7,11 @@ import { apiRequest, getUser } from '../../utils/api';
 import {
   ShieldCheck, Percent, CheckCircle, AlertTriangle, RefreshCw,
   XCircle, Coins, ShieldAlert, Store, Users, ShoppingBag,
-  Clock, Check, X, BarChart2, Settings, Eye, Ban
+  Clock, Check, X, BarChart2, Settings, Eye, Ban, Zap, Wallet
 } from 'lucide-react';
 import Link from 'next/link';
 
-type AdminTab = 'pending' | 'all-stores' | 'disputes' | 'settings';
+type AdminTab = 'pending' | 'all-stores' | 'users' | 'disputes' | 'settings';
 
 const STATUS_BADGE: Record<string, string> = {
   pending:   'bg-amber-100 text-amber-700 border-amber-200',
@@ -27,9 +27,11 @@ export default function AdminPanel() {
   const [pendingStores, setPendingStores] = useState<any[]>([]);
   const [allStores, setAllStores] = useState<any[]>([]);
   const [disputes, setDisputes] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [airdropResult, setAirdropResult] = useState<Record<string, { ok: boolean; msg: string }>>({});
 
   // Settings state
   const [feePercentage, setFeePercentage] = useState('');
@@ -46,16 +48,18 @@ export default function AdminPanel() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [pendingRes, allRes, disputesRes, analyticsRes] = await Promise.all([
+      const [pendingRes, allRes, disputesRes, analyticsRes, usersRes] = await Promise.all([
         apiRequest('/admin/pending-stores?status=pending'),
         apiRequest('/admin/all-stores?status=active'),
         apiRequest('/admin/disputes').catch(() => ({ success: false, data: [] })),
-        apiRequest('/admin/analytics')
+        apiRequest('/admin/analytics'),
+        apiRequest('/admin/users')
       ]);
       if (pendingRes.success) setPendingStores(pendingRes.data);
       if (allRes.success) setAllStores(allRes.data);
       if (disputesRes.success) setDisputes(disputesRes.data || []);
       if (analyticsRes.success) setAnalytics(analyticsRes.data);
+      if (usersRes.success) setUsers(usersRes.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -127,9 +131,37 @@ export default function AdminPanel() {
     }
   };
 
+  const handleAirdrop = async (userId: string) => {
+    setActionLoading(userId);
+    try {
+      const res = await apiRequest('/admin/airdrop', {
+        method: 'POST',
+        body: JSON.stringify({ userId })
+      });
+      if (res.success) {
+        const r = res.data.results as Record<string, { success: boolean; error?: string }>;
+        const failed = Object.entries(r).filter(([, v]) => !v.success).map(([t]) => t);
+        setAirdropResult(prev => ({
+          ...prev,
+          [userId]: failed.length === 0
+            ? { ok: true,  msg: '100 CELO · cUSD · USDC · USDT sent!' }
+            : { ok: false, msg: `Partial — failed: ${failed.join(', ')}` }
+        }));
+      } else {
+        setAirdropResult(prev => ({ ...prev, [userId]: { ok: false, msg: res.message || 'Failed' } }));
+      }
+    } catch (err: any) {
+      setAirdropResult(prev => ({ ...prev, [userId]: { ok: false, msg: err.message } }));
+    } finally {
+      setActionLoading(null);
+      setTimeout(() => setAirdropResult(prev => { const n = { ...prev }; delete n[userId]; return n; }), 6000);
+    }
+  };
+
   const TABS: { id: AdminTab; label: string; count?: number }[] = [
     { id: 'pending',    label: 'Pending Stores', count: pendingStores.length },
     { id: 'all-stores', label: 'Active Stores',  count: allStores.length },
+    { id: 'users',      label: 'Users',           count: users.length },
     { id: 'disputes',   label: 'Disputes',        count: disputes.length },
     { id: 'settings',   label: 'Settings' },
   ];
@@ -292,6 +324,76 @@ export default function AdminPanel() {
                   </span>
                 </div>
               ))
+            )}
+          </section>
+        )}
+
+        {/* ── Users ── */}
+        {tab === 'users' && (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-neutral-500">{users.length} registered users — click <strong>Airdrop</strong> to send 100 of each test token to their wallet.</p>
+            </div>
+            {users.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-dashed border-neutral-300 p-16 text-center">
+                <Users className="h-10 w-10 mx-auto text-neutral-300 mb-3" />
+                <p className="text-sm font-bold text-neutral-600">No users yet</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-neutral-200 overflow-hidden">
+                <div className="divide-y divide-neutral-100">
+                  {users.map((user: any) => (
+                    <div key={user.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                      {/* Avatar */}
+                      <div className="h-9 w-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 text-sm font-black text-amber-700">
+                        {(user.fullName || user.username || 'U')[0].toUpperCase()}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-extrabold text-neutral-900">{user.fullName || user.username}</p>
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                            user.role === 'admin'  ? 'bg-violet-100 text-violet-700 border-violet-200' :
+                            user.role === 'seller' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                                                     'bg-neutral-100 text-neutral-500 border-neutral-200'
+                          }`}>{user.role}</span>
+                          {user.status === 'suspended' && (
+                            <span className="rounded-full border px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-600 border-rose-200">suspended</span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-neutral-400">{user.email}</p>
+                        {user.walletAddress ? (
+                          <p className="text-[10px] font-mono text-neutral-400 truncate max-w-xs">
+                            <Wallet className="inline h-2.5 w-2.5 mr-1" />{user.walletAddress}
+                          </p>
+                        ) : (
+                          <p className="text-[10px] text-neutral-300 italic">No wallet yet</p>
+                        )}
+                      </div>
+
+                      {/* Airdrop */}
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        {airdropResult[user.id] && (
+                          <p className={`text-[10px] font-bold ${airdropResult[user.id].ok ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {airdropResult[user.id].msg}
+                          </p>
+                        )}
+                        <button
+                          onClick={() => handleAirdrop(user.id)}
+                          disabled={actionLoading === user.id || !user.walletAddress}
+                          className="flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-40 px-4 py-2 text-xs font-bold text-white transition-colors cursor-pointer"
+                        >
+                          {actionLoading === user.id
+                            ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            : <Zap className="h-3.5 w-3.5" />}
+                          Airdrop 100
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </section>
         )}

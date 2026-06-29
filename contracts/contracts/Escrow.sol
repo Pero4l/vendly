@@ -162,7 +162,7 @@ contract VendlyEscrow is ReentrancyGuard {
         // may still have an approved/credited balance they need to claim.
 
         uint256 claimable = o.approvedAmount - o.withdrawnAmount;
-        require(claimable > 0, "Escrow: nothing to withdraw — wait for admin approval");
+        require(claimable > 0, "Escrow: nothing to withdraw");
 
         o.withdrawnAmount += claimable;
         _sendFunds(o.token, o.seller, claimable);

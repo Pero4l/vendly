@@ -49,6 +49,7 @@ export default function StorePage() {
   const [pPrice, setPPrice] = useState('');
   const [pQty, setPQty] = useState('1');
   const [pCatId, setPCatId] = useState('');
+  const [pQuality, setPQuality] = useState('new');
   const [pImgFile, setPImgFile] = useState<File | null>(null);
   const [pImgPreview, setPImgPreview] = useState('');
   const [pImgUrl, setPImgUrl] = useState('');
@@ -134,7 +135,7 @@ export default function StorePage() {
 
   const openAddProduct = () => {
     setEditingProduct(null);
-    setPTitle(''); setPDesc(''); setPPrice(''); setPQty('1'); setPImgFile(null); setPImgPreview(''); setPImgUrl(''); setPError('');
+    setPTitle(''); setPDesc(''); setPPrice(''); setPQty('1'); setPQuality('new'); setPImgFile(null); setPImgPreview(''); setPImgUrl(''); setPError('');
     if (categories.length > 0) setPCatId(categories[0].id);
     setShowAddProduct(true);
   };
@@ -143,6 +144,7 @@ export default function StorePage() {
     setEditingProduct(p);
     setPTitle(p.title || ''); setPDesc(p.description || ''); setPPrice(String(p.price || '')); setPQty(String(p.quantity || '0'));
     setPCatId(p.categoryId || (categories[0]?.id || ''));
+    setPQuality(p.quality || 'new');
     const existingImg = getProductImage(p.images);
     setPImgPreview(existingImg); setPImgUrl(existingImg); setPImgFile(null); setPError('');
     setShowAddProduct(true);
@@ -166,6 +168,7 @@ export default function StorePage() {
       const body = {
         title: pTitle, description: pDesc, price: pPrice,
         quantity: parseInt(pQty) || 0, categoryId: pCatId,
+        quality: pQuality,
         ...(imageUrl ? { images: [{ url: imageUrl }] } : {})
       };
 
@@ -454,6 +457,26 @@ export default function StorePage() {
                         </select>
                       </div>
                     )}
+                    <div className="col-span-2">
+                      <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Condition</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {([
+                          { value: 'new',        label: 'New',         desc: 'Brand new, unused' },
+                          { value: 'neatly_used', label: 'Neatly Used', desc: 'Good condition, minor wear' },
+                          { value: 'old_used',   label: 'Old Used',    desc: 'Visible wear, still works' },
+                        ] as const).map(opt => (
+                          <button key={opt.value} type="button" onClick={() => setPQuality(opt.value)}
+                            className={`rounded-xl border-2 p-2.5 text-left transition-colors ${
+                              pQuality === opt.value
+                                ? 'border-amber-500 bg-amber-50'
+                                : 'border-neutral-200 hover:border-neutral-300 bg-white'
+                            }`}>
+                            <p className={`text-xs font-black ${pQuality === opt.value ? 'text-amber-700' : 'text-neutral-800'}`}>{opt.label}</p>
+                            <p className="text-[10px] text-neutral-400 mt-0.5 leading-tight">{opt.desc}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <div className="col-span-2">
                       <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Description</label>
                       <textarea value={pDesc} onChange={e => setPDesc(e.target.value)} rows={3} placeholder="Describe your product..."
