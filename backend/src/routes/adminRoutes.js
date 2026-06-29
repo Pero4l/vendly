@@ -16,5 +16,7 @@ router.get('/analytics', adminController.getAnalytics);
 router.get('/users', adminController.listUsers);
 router.post('/airdrop', adminController.airdropTestTokens);
 router.get('/orders', adminController.listOrders);
+router.get('/disputes', adminController.listDisputes);
+router.post('/disputes/:id/resolve', adminController.resolveDisputeAdmin);
 
 module.exports = router;

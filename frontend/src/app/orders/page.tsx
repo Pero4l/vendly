@@ -159,7 +159,7 @@ function OrdersContent() {
                   </div>
 
                   {/* Milestone progress */}
-                  {order.status !== 'PENDING' && order.status !== 'DISPUTED' && (
+                  {order.status !== 'pending' && order.status !== 'disputed' && (
                     <div className="mt-3 pt-3 border-t border-neutral-50">
                       <div className="flex items-center gap-1">
                         {MILESTONE_STAGES.map((ms, i) => (

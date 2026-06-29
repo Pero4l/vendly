@@ -1,4 +1,4 @@
-const { User, Store, StoreProfile, Order, Escrow, AdminAction, Setting, Wallet, sequelize } = require('../models');
+const { User, Store, StoreProfile, Order, OrderItem, Product, Escrow, AdminAction, Setting, Wallet, sequelize } = require('../models');
 const celoService = require('../blockchain/celoService');
 const { decrypt } = require('../utils/encryption');
 const notificationService = require('../services/notificationService');
@@ -118,13 +118,13 @@ async function releaseEscrowStage(req, res, next) {
 
     if (stage === 1) {
       if (escrowRecord.stage !== 0) throw new Error('Stage 1 already executed');
-      escrowRecord.releasedAmount = parseFloat(escrowRecord.releasedAmount) + (parseFloat(escrowRecord.totalAmount) * 0.3);
+      escrowRecord.releasedAmount = parseFloat(escrowRecord.releasedAmount) + (parseFloat(escrowRecord.amount) * 0.3);
     } else if (stage === 2) {
       if (escrowRecord.stage !== 1) throw new Error('Order must be in Stage 1 to release Stage 2');
-      escrowRecord.releasedAmount = parseFloat(escrowRecord.releasedAmount) + (parseFloat(escrowRecord.totalAmount) * 0.2);
+      escrowRecord.releasedAmount = parseFloat(escrowRecord.releasedAmount) + (parseFloat(escrowRecord.amount) * 0.2);
     } else if (stage === 3) {
       if (escrowRecord.stage !== 2) throw new Error('Order must be in Stage 2 to release Stage 3');
-      escrowRecord.releasedAmount = parseFloat(escrowRecord.releasedAmount) + (parseFloat(escrowRecord.totalAmount) * 0.5);
+      escrowRecord.releasedAmount = parseFloat(escrowRecord.releasedAmount) + (parseFloat(escrowRecord.amount) * 0.5);
       order.status = 'completed';
       await order.save();
     } else {
@@ -260,16 +260,92 @@ async function listOrders(req, res, next) {
   try {
     const orders = await Order.findAll({
       include: [
-        { model: User, as: 'user', attributes: ['id', 'email', 'fullName', 'username'] },
-        { model: Store, as: 'store', attributes: ['id', 'name'] },
-        { model: Escrow, as: 'escrow', attributes: ['id', 'status', 'stage', 'totalAmount', 'releasedAmount'] }
+        { model: User, as: 'buyer', attributes: ['id', 'email', 'fullName', 'username'] },
+        { model: Escrow, as: 'escrow', attributes: ['id', 'status', 'stage', 'amount', 'releasedAmount'] },
+        {
+          model: OrderItem, as: 'items',
+          limit: 1,
+          include: [{
+            model: Product, as: 'product',
+            attributes: ['id', 'title'],
+            include: [{ model: Store, as: 'store', attributes: ['id', 'name'] }]
+          }]
+        }
       ],
       order: [['createdAt', 'DESC']],
       limit: 100
     });
-    res.status(200).json({ success: true, data: orders });
+
+    const data = orders.map(o => ({
+      ...o.toJSON(),
+      storeName: o.items?.[0]?.product?.store?.name || '—'
+    }));
+
+    res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
+  }
+}
+
+async function listDisputes(req, res, next) {
+  try {
+    const { Dispute } = require('../models');
+    const list = await Dispute.findAll({
+      include: [{ model: Order, as: 'order', include: [{ model: User, as: 'buyer', attributes: ['id', 'email', 'fullName'] }] }],
+      order: [['createdAt', 'DESC']]
+    });
+    res.status(200).json({ success: true, data: list });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function resolveDisputeAdmin(req, res, next) {
+  try {
+    const { Dispute } = require('../models');
+    const { id } = req.params;
+    const { refundPercentage } = req.body;
+
+    const dispute = await Dispute.findByPk(id, {
+      include: [{ model: Order, as: 'order', include: [{ model: Escrow, as: 'escrow' }] }]
+    });
+    if (!dispute) return res.status(404).json({ success: false, message: 'Dispute not found' });
+    if (dispute.status === 'RESOLVED') return res.status(400).json({ success: false, message: 'Already resolved' });
+
+    const order = dispute.order;
+    const escrowRecord = order?.escrow;
+    const totalAmt = parseFloat(order?.totalAmount || 0);
+    const refundAmt = totalAmt * (parseFloat(refundPercentage || 0) / 100);
+
+    let txHash = null;
+    try {
+      const celoSvc = require('../blockchain/celoService');
+      txHash = await celoSvc.triggerDisputeResolve(order.id, refundAmt.toString());
+    } catch (err) {
+      console.error('[Dispute] On-chain resolve failed:', err.message);
+    }
+
+    dispute.status = 'RESOLVED';
+    dispute.resolutionDetails = `Admin resolved: ${refundPercentage}% refund to buyer`;
+    dispute.refundAmount = refundAmt;
+    await dispute.save();
+
+    if (order) {
+      order.status = refundPercentage >= 100 ? 'refunded' : 'completed';
+      await order.save();
+    }
+    if (escrowRecord) {
+      escrowRecord.stage = 3;
+      escrowRecord.status = refundPercentage >= 100 ? 'REFUNDED' : 'released';
+      await escrowRecord.save();
+    }
+
+    await logAction(req.user.id, 'DISPUTE_RESOLVE', 'order', order?.id || id,
+      `Dispute ${id} resolved — ${refundPercentage}% refund. txHash: ${txHash}`);
+
+    res.status(200).json({ success: true, message: 'Dispute resolved', txHash });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
   }
 }
 
@@ -282,5 +358,7 @@ module.exports = {
   getAnalytics,
   listUsers,
   airdropTestTokens,
-  listOrders
+  listOrders,
+  listDisputes,
+  resolveDisputeAdmin
 };

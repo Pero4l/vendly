@@ -406,7 +406,7 @@ function MarketplaceContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {products.map((product: any) => {
                 const img = product.images?.[0]?.url || product.images?.[0]?.imageUrl || 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&q=80&w=400';
-                const rating = product.rating ? parseFloat(product.rating) : null;
+                const rating = product.averageRating ? parseFloat(product.averageRating) : null;
                 const usdEstimate = (parseFloat(product.price) * 0.70).toFixed(2);
 
                 return (

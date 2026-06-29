@@ -1,5 +1,7 @@
-const { Order, OrderItem, Product, Store, StoreProfile, Escrow, User, sequelize } = require('../models');
+const { Order, OrderItem, Product, Store, StoreProfile, Escrow, Wallet, User, sequelize } = require('../models');
 const notificationService = require('../services/notificationService');
+const celoService = require('../blockchain/celoService');
+const { decrypt } = require('../utils/encryption');
 
 function generateOrderNumber() {
   return 'VND-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -81,7 +83,7 @@ async function createOrder(req, res, next) {
       amount: totalAmount,
       releasedAmount: 0,
       remainingAmount: totalAmount,
-      stage: 1,
+      stage: 0,
       status: 'active'
     }, { transaction });
 
@@ -119,13 +121,34 @@ async function confirmPayment(req, res, next) {
     if (order.buyerId !== req.user.id) return res.status(403).json({ success: false, message: 'Unauthorized' });
 
     await order.update({ status: 'paid', txHash: txHash || null });
-    if (order.escrow) await order.escrow.update({ status: 'LOCKED' });
+
+    // Lock funds on-chain now that buyer has confirmed payment
+    let onChainTxHash = txHash || null;
+    if (order.escrow) {
+      try {
+        const sellerWallet = await Wallet.findOne({ where: { userId: order.escrow.sellerId } });
+        const buyerWallet  = await Wallet.findOne({ where: { userId: order.buyerId } });
+        if (sellerWallet && buyerWallet) {
+          const buyerPrivateKey = decrypt(buyerWallet.encryptedPrivateKey);
+          onChainTxHash = await celoService.lockEscrowFunds(
+            order.id,
+            buyerWallet.address,
+            sellerWallet.address,
+            'CELO',
+            order.totalAmount
+          );
+        }
+      } catch (escrowErr) {
+        console.error('[Escrow] lockFunds failed:', escrowErr.message);
+      }
+      await order.escrow.update({ status: 'LOCKED' });
+    }
 
     try {
       await notificationService.notifyUser(order.buyerId, 'Payment Confirmed', `Payment for order ${order.orderNumber} is locked in escrow.`, 'escrow');
     } catch {}
 
-    res.status(200).json({ success: true, message: 'Payment confirmed', data: order });
+    res.status(200).json({ success: true, message: 'Payment confirmed', data: { ...order.toJSON(), onChainTxHash } });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }

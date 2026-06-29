@@ -12,7 +12,7 @@ import { getUser, removeToken, removeUser, apiRequest } from '../utils/api';
 import { useCart } from '../context/CartContext';
 
 const TABS = [
-  { href: '/',            icon: Home,            label: 'Home' },
+  { href: '/dashboard',            icon: Home,            label: 'Home' },
   { href: '/marketplace', icon: ShoppingBag,      label: 'Shop' },
   { href: '/orders',      icon: Package,          label: 'Orders' },
   { href: '/wallet',      icon: Wallet,           label: 'Wallet' },

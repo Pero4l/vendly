@@ -86,7 +86,7 @@ async function listProducts(req, res, next) {
       if (minPrice) filter.price[Op.gte] = parseFloat(minPrice);
       if (maxPrice) filter.price[Op.lte] = parseFloat(maxPrice);
     }
-    if (minRating) filter.rating = { [Op.gte]: parseFloat(minRating) };
+    if (minRating) filter.averageRating = { [Op.gte]: parseFloat(minRating) };
 
     const products = await Product.findAll({
       where: filter,

@@ -329,8 +329,8 @@ export default function AdminPanel() {
                   {orders.slice(0, 5).map((o: any) => (
                     <div key={o.id} className="px-5 py-3 flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-neutral-800 truncate">{o.user?.fullName || o.user?.email}</p>
-                        <p className="text-[10px] text-neutral-400">{o.store?.name} · {new Date(o.createdAt).toLocaleDateString()}</p>
+                        <p className="text-xs font-bold text-neutral-800 truncate">{o.buyer?.fullName || o.buyer?.email}</p>
+                        <p className="text-[10px] text-neutral-400">{o.storeName} · {new Date(o.createdAt).toLocaleDateString()}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-xs font-black text-neutral-700">{o.totalAmount} CELO</span>
@@ -484,10 +484,10 @@ export default function AdminPanel() {
                     <div key={o.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
                       <div className="flex-1 min-w-0 space-y-0.5">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-extrabold text-neutral-900">{o.store?.name || 'Unknown store'}</p>
+                          <p className="text-sm font-extrabold text-neutral-900">{o.storeName || 'Unknown store'}</p>
                           <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${STATUS_BADGE[o.status] || STATUS_BADGE.cancelled}`}>{o.status}</span>
                         </div>
-                        <p className="text-[11px] text-neutral-400">Buyer: {o.user?.fullName || o.user?.email || '—'} · {new Date(o.createdAt).toLocaleDateString()}</p>
+                        <p className="text-[11px] text-neutral-400">Buyer: {o.buyer?.fullName || o.buyer?.email || '—'} · {new Date(o.createdAt).toLocaleDateString()}</p>
                         <p className="text-[10px] font-mono text-neutral-300">{o.id}</p>
                       </div>
                       <div className="flex items-center gap-4 shrink-0">

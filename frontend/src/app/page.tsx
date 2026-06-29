@@ -201,7 +201,7 @@ export default function Home() {
           <div className="lg:col-span-5 relative flex justify-center">
             <div className="relative rounded-3xl overflow-hidden border border-neutral-800 bg-neutral-900/20 shadow-2xl glow-glow max-w-md w-full aspect-square">
               <img
-                src="/hero_secure_escrow.png"
+                src="/landing.jpeg"
                 alt="Secure Escrow Protection"
                 className="w-full h-full object-cover rounded-3xl"
               />

@@ -32,7 +32,20 @@ async function markAsRead(req, res, next) {
   }
 }
 
+async function markAllRead(req, res, next) {
+  try {
+    await Notification.update(
+      { read: true },
+      { where: { userId: req.user.id, read: false } }
+    );
+    res.status(200).json({ success: true, message: 'All notifications marked as read' });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getNotifications,
-  markAsRead
+  markAsRead,
+  markAllRead
 };
