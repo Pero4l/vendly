@@ -1,5 +1,5 @@
 const walletService = require('../services/walletService');
-const { Wallet, Withdrawal, Transaction } = require('../models');
+const { Wallet, Withdrawal, Transaction, Order, OrderItem, Product } = require('../models');
 const celoService = require('../blockchain/celoService');
 
 async function getBalance(req, res, next) {
@@ -70,7 +70,25 @@ async function getHistory(req, res, next) {
 
     const transactions = await Transaction.findAll({
       where: { walletId: wallet.id },
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
+      include: [
+        {
+          model: Order,
+          as: 'order',
+          required: false,
+          attributes: ['id', 'orderNumber', 'totalAmount', 'status'],
+          include: [
+            {
+              model: OrderItem,
+              as: 'items',
+              attributes: ['quantity', 'unitPrice', 'totalPrice'],
+              include: [
+                { model: Product, as: 'product', attributes: ['id', 'title', 'images'] }
+              ]
+            }
+          ]
+        }
+      ]
     });
 
     res.status(200).json({ success: true, data: transactions });

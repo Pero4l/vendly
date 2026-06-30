@@ -68,10 +68,10 @@ async function transferUserFunds(userId, receiverAddress, tokenSymbol, amount) {
   // Register pending transaction in DB
   const dbTx = await Transaction.create({
     walletId: userWallet.id,
-    type: 'TRANSFER',
+    type: 'transfer',
     token: tokenSymbol,
     amount,
-    status: 'PENDING',
+    status: 'pending',
     senderAddress: userWallet.address,
     receiverAddress
   });
@@ -84,13 +84,13 @@ async function transferUserFunds(userId, receiverAddress, tokenSymbol, amount) {
       amount
     );
 
-    dbTx.status = 'COMPLETED';
+    dbTx.status = 'success';
     dbTx.txHash = txHash;
     await dbTx.save();
 
     return dbTx;
   } catch (error) {
-    dbTx.status = 'FAILED';
+    dbTx.status = 'failed';
     await dbTx.save();
     throw error;
   }

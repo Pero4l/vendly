@@ -20,12 +20,40 @@ const TOKEN_META: Record<Token, { color: string; bg: string; border: string; ico
   USDC: { color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', icon: '🔵' },
 };
 
-const TX_TYPE_META: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
-  DEPOSIT: { label: 'Deposit', color: 'text-emerald-700', bg: 'bg-emerald-50', icon: <ArrowDownLeft className="h-4 w-4" /> },
-  WITHDRAWAL: { label: 'Withdrawal', color: 'text-rose-700', bg: 'bg-rose-50', icon: <ArrowUpRight className="h-4 w-4" /> },
-  TRANSFER: { label: 'Transfer', color: 'text-blue-700', bg: 'bg-blue-50', icon: <ArrowRightLeft className="h-4 w-4" /> },
-  ESCROW: { label: 'Escrow', color: 'text-amber-700', bg: 'bg-amber-50', icon: <ShieldCheck className="h-4 w-4" /> },
+const TX_TYPE_META: Record<string, { label: string; dir: 'in' | 'out'; iconBg: string; iconColor: string; amountColor: string; icon: React.ReactNode }> = {
+  deposit:        { label: 'Deposit',        dir: 'in',  iconBg: 'bg-emerald-50', iconColor: 'text-emerald-700', amountColor: 'text-emerald-600', icon: <ArrowDownLeft className="h-4 w-4" /> },
+  purchase:       { label: 'Product Bought', dir: 'out', iconBg: 'bg-orange-50',  iconColor: 'text-orange-700',  amountColor: 'text-orange-500',  icon: <Package className="h-4 w-4" /> },
+  escrow_release: { label: 'Escrow Release', dir: 'in',  iconBg: 'bg-emerald-50', iconColor: 'text-emerald-700', amountColor: 'text-emerald-600', icon: <ShieldCheck className="h-4 w-4" /> },
+  withdrawal:     { label: 'Withdrawal',     dir: 'out', iconBg: 'bg-rose-50',    iconColor: 'text-rose-700',    amountColor: 'text-rose-600',    icon: <ArrowUpRight className="h-4 w-4" /> },
+  refund:         { label: 'Refund',         dir: 'in',  iconBg: 'bg-emerald-50', iconColor: 'text-emerald-700', amountColor: 'text-emerald-600', icon: <ArrowDownLeft className="h-4 w-4" /> },
+  transfer:       { label: 'Transfer',       dir: 'out', iconBg: 'bg-rose-50',    iconColor: 'text-rose-700',    amountColor: 'text-rose-600',    icon: <ArrowRightLeft className="h-4 w-4" /> },
 };
+
+function getTxDescription(tx: any): string {
+  if (tx.type === 'purchase' && tx.order) {
+    const names = (tx.order.items || [])
+      .map((i: any) => i.product?.title)
+      .filter(Boolean)
+      .join(', ');
+    return `Order ${tx.order.orderNumber}${names ? ` · ${names}` : ''}`;
+  }
+  if (tx.type === 'escrow_release' && tx.order) {
+    return `Escrow released · Order ${tx.order.orderNumber}`;
+  }
+  if (tx.type === 'refund' && tx.order) {
+    return `Refund · Order ${tx.order.orderNumber}`;
+  }
+  if (tx.type === 'transfer') {
+    return tx.receiverAddress ? `→ ${tx.receiverAddress}` : 'Transfer out';
+  }
+  if (tx.type === 'withdrawal') {
+    return tx.receiverAddress ? `→ ${tx.receiverAddress}` : 'Withdrawn to external wallet';
+  }
+  if (tx.type === 'deposit') {
+    return tx.senderAddress ? `← ${tx.senderAddress}` : 'Received CELO';
+  }
+  return tx.type;
+}
 
 type ModalType = 'send' | 'withdraw' | 'deposit' | null;
 
@@ -43,6 +71,7 @@ export default function WalletPage() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [selectedTx, setSelectedTx] = useState<any>(null);
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -169,7 +198,104 @@ export default function WalletPage() {
         </div>
       )}
 
-      {/* Modal overlay */}
+      {/* Transaction Detail Modal */}
+      {selectedTx && (() => {
+        const meta = TX_TYPE_META[selectedTx.type] || TX_TYPE_META.transfer;
+        const desc = getTxDescription(selectedTx);
+        return (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm px-4">
+            <div className="bg-white rounded-2xl border border-neutral-200 shadow-2xl w-full max-w-md p-6 space-y-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`h-8 w-8 rounded-lg ${meta.iconBg} ${meta.iconColor} flex items-center justify-center`}>
+                    {meta.icon}
+                  </div>
+                  <h3 className="text-base font-black text-neutral-900">{meta.label}</h3>
+                </div>
+                <button onClick={() => setSelectedTx(null)} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 transition-colors cursor-pointer">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="rounded-xl bg-neutral-50 border border-neutral-100 p-4 text-center">
+                  <p className={`text-3xl font-black ${meta.amountColor}`}>
+                    {meta.dir === 'out' ? '-' : '+'}{selectedTx.amount} {selectedTx.token}
+                  </p>
+                  <p className="text-xs text-neutral-400 mt-1">{meta.label}</p>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="text-neutral-400 font-medium shrink-0">Status</span>
+                    <span className={`font-bold uppercase text-xs px-2 py-0.5 rounded-full ${
+                      selectedTx.status === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                      selectedTx.status === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                      'bg-rose-50 text-rose-700 border border-rose-200'
+                    }`}>{selectedTx.status}</span>
+                  </div>
+
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="text-neutral-400 font-medium shrink-0">Date</span>
+                    <span className="font-semibold text-neutral-700 text-right">{new Date(selectedTx.createdAt).toLocaleString()}</span>
+                  </div>
+
+                  {desc && (
+                    <div className="flex justify-between items-start gap-2">
+                      <span className="text-neutral-400 font-medium shrink-0">Details</span>
+                      <span className="font-semibold text-neutral-700 text-right break-all">{desc}</span>
+                    </div>
+                  )}
+
+                  {selectedTx.senderAddress && (
+                    <div className="flex justify-between items-start gap-2">
+                      <span className="text-neutral-400 font-medium shrink-0">From</span>
+                      <span className="font-mono text-[11px] text-neutral-700 text-right break-all">{selectedTx.senderAddress}</span>
+                    </div>
+                  )}
+
+                  {selectedTx.receiverAddress && (
+                    <div className="flex justify-between items-start gap-2">
+                      <span className="text-neutral-400 font-medium shrink-0">To</span>
+                      <span className="font-mono text-[11px] text-neutral-700 text-right break-all">{selectedTx.receiverAddress}</span>
+                    </div>
+                  )}
+
+                  {selectedTx.txHash && (
+                    <div className="flex justify-between items-start gap-2">
+                      <span className="text-neutral-400 font-medium shrink-0">Tx Hash</span>
+                      <span className="font-mono text-[11px] text-neutral-700 text-right break-all">{selectedTx.txHash}</span>
+                    </div>
+                  )}
+                </div>
+
+                {selectedTx.txHash && (
+                  <a
+                    href={`https://celo-sepolia.celoscan.io/tx/${selectedTx.txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold py-3 transition-colors"
+                  >
+                    <ExternalLink className="h-4 w-4" /> View on Celoscan
+                  </a>
+                )}
+
+                {selectedTx.type === 'purchase' && selectedTx.order && (
+                  <Link
+                    href={`/track-order?orderId=${selectedTx.order.id}`}
+                    onClick={() => setSelectedTx(null)}
+                    className="flex items-center justify-center gap-2 w-full rounded-xl border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 text-sm font-bold py-3 transition-colors"
+                  >
+                    <Package className="h-4 w-4" /> Track Order
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Send / Withdraw / Deposit Modal */}
       {modal && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm px-4">
           <div className="bg-white rounded-2xl border border-neutral-200 shadow-2xl w-full max-w-md p-6 space-y-5">
@@ -204,7 +330,6 @@ export default function WalletPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Token selector */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] text-neutral-500 font-bold uppercase tracking-wider block">Asset</label>
                   <div className="relative">
@@ -221,7 +346,6 @@ export default function WalletPage() {
                   </div>
                 </div>
 
-                {/* Recipient / Destination */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] text-neutral-500 font-bold uppercase tracking-wider block">
                     {modal === 'send' ? 'Recipient Wallet Address' : 'Destination External Address'}
@@ -235,7 +359,6 @@ export default function WalletPage() {
                   />
                 </div>
 
-                {/* Amount */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] text-neutral-500 font-bold uppercase tracking-wider block">Amount</label>
                   <div className="relative">
@@ -391,7 +514,14 @@ export default function WalletPage() {
               <TrendingUp className="h-4 w-4 text-amber-500" />
               Transaction History
             </h2>
-            <span className="text-[11px] text-neutral-400 font-semibold">{transactions.length} transactions</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] text-neutral-400 font-semibold">{transactions.length} transactions</span>
+              <div className="flex items-center gap-2 text-[10px] font-bold">
+                <span className="flex items-center gap-1 text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" /> In</span>
+                <span className="flex items-center gap-1 text-rose-600"><span className="h-2 w-2 rounded-full bg-rose-500 inline-block" /> Out</span>
+                <span className="flex items-center gap-1 text-orange-500"><span className="h-2 w-2 rounded-full bg-orange-500 inline-block" /> Purchase</span>
+              </div>
+            </div>
           </div>
 
           {transactions.length === 0 ? (
@@ -403,63 +533,48 @@ export default function WalletPage() {
           ) : (
             <div className="divide-y divide-neutral-100">
               {transactions.map((tx: any) => {
-                const meta = TX_TYPE_META[tx.type] || TX_TYPE_META.TRANSFER;
-                const isOut = tx.type === 'WITHDRAWAL' || tx.type === 'TRANSFER' || tx.type === 'ESCROW';
+                const meta = TX_TYPE_META[tx.type] || TX_TYPE_META.transfer;
+                const desc = getTxDescription(tx);
                 return (
-                  <div key={tx.id} className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-neutral-50 transition-colors">
+                  <button
+                    key={tx.id}
+                    onClick={() => setSelectedTx(tx)}
+                    className="w-full px-6 py-4 flex items-center justify-between gap-4 hover:bg-neutral-50 transition-colors text-left cursor-pointer"
+                  >
                     <div className="flex items-center gap-3">
-                      <div className={`h-9 w-9 rounded-xl ${meta.bg} ${meta.color} flex items-center justify-center shrink-0`}>
+                      <div className={`h-9 w-9 rounded-xl ${meta.iconBg} ${meta.iconColor} flex items-center justify-center shrink-0`}>
                         {meta.icon}
                       </div>
                       <div className="space-y-0.5">
                         <p className="text-xs font-bold text-neutral-800">{meta.label}</p>
-                        <p className="text-[10px] text-neutral-400 font-mono truncate max-w-[180px]">
-                          {isOut ? `→ ${tx.receiverAddress}` : `← ${tx.senderAddress}`}
-                        </p>
+                        <p className="text-[10px] text-neutral-400 truncate max-w-[200px]">{desc}</p>
                         <p className="text-[10px] text-neutral-400">{new Date(tx.createdAt).toLocaleString()}</p>
                       </div>
                     </div>
                     <div className="text-right space-y-1 shrink-0">
-                      <p className={`text-sm font-black ${isOut ? 'text-neutral-800' : 'text-emerald-600'}`}>
-                        {isOut ? '-' : '+'}{tx.amount} {tx.token}
+                      <p className={`text-sm font-black ${meta.amountColor}`}>
+                        {meta.dir === 'out' ? '-' : '+'}{tx.amount} {tx.token}
                       </p>
-                      <div className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${tx.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                        tx.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                          'bg-rose-50 text-rose-700 border border-rose-200'
-                        }`}>
-                        {tx.status === 'COMPLETED' ? <CheckCircle className="h-2.5 w-2.5" /> : <Clock className="h-2.5 w-2.5" />}
+                      <div className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                        tx.status === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                        tx.status === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                        'bg-rose-50 text-rose-700 border border-rose-200'
+                      }`}>
+                        {tx.status === 'success' ? <CheckCircle className="h-2.5 w-2.5" /> : <Clock className="h-2.5 w-2.5" />}
                         {tx.status}
                       </div>
                       {tx.txHash && (
-                        <a
-                          href={`https://celo-sepolia.blockscout.com/tx/${tx.txHash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-0.5 text-[10px] text-amber-600 hover:text-amber-700 font-bold"
-                        >
-                          View on Explorer <ExternalLink className="h-2.5 w-2.5" />
-                        </a>
+                        <p className="text-[10px] text-amber-600 font-bold flex items-center gap-0.5 justify-end">
+                          View on Celoscan <ExternalLink className="h-2.5 w-2.5" />
+                        </p>
                       )}
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
           )}
         </div>
-
-        {/* Security Notice */}
-        {/* <div className="rounded-2xl bg-neutral-950 text-white p-6 flex items-start gap-4 border border-neutral-900">
-          <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0 border border-amber-500/20">
-            <ShieldCheck className="h-5 w-5 text-amber-400" />
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-sm font-black">Custodial Wallet Security</h3>
-            <p className="text-xs text-neutral-400 leading-relaxed">
-              Your Vendly wallet private key is AES-256 encrypted and stored in our secure database — never exposed in transit. For non-custodial control, use the RainbowKit wallet in the header to connect your own hardware wallet.
-            </p>
-          </div>
-        </div> */}
 
       </main>
     </div>

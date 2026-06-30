@@ -28,6 +28,14 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.UUID,
       allowNull: true
     },
+    senderAddress: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    receiverAddress: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
     type: {
       type: DataTypes.ENUM('deposit', 'purchase', 'escrow_release', 'withdrawal', 'refund', 'transfer'),
       allowNull: false
