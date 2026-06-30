@@ -131,26 +131,51 @@ async function releaseEscrowStage(req, res, next) {
       return res.status(400).json({ success: false, message: 'Invalid stage' });
     }
 
-    const txHash = await celoService.triggerEscrowRelease(order.id, stage);
+    const stagePercents = { 1: 0.3, 2: 0.2, 3: 0.5 };
+    const releaseAmount = parseFloat(escrowRecord.amount) * stagePercents[stage];
+
+    // Try on-chain release (only works if the order was locked on-chain)
+    let txHash = null;
+    let withdrawTxHash = null;
+    const lockedOnChain = !!escrowRecord.contractTxHash;
+
+    if (lockedOnChain) {
+      try {
+        txHash = await celoService.triggerEscrowRelease(order.id, stage);
+        const sellerWallet = await Wallet.findOne({ where: { userId: escrowRecord.sellerId } });
+        if (sellerWallet) {
+          const sellerPrivateKey = decrypt(sellerWallet.encryptedPrivateKey);
+          withdrawTxHash = await celoService.triggerSellerWithdraw(order.id, sellerPrivateKey);
+        }
+      } catch (onChainErr) {
+        console.warn(`[Escrow] On-chain release failed, using DB-only mode:`, onChainErr.message);
+      }
+    }
+
+    // Always credit seller's DB balance for the released amount
+    const sellerWallet = await Wallet.findOne({ where: { userId: escrowRecord.sellerId } });
+    if (sellerWallet) {
+      const { Transaction } = require('../models');
+      await sellerWallet.update({ celoBalance: parseFloat(sellerWallet.celoBalance || 0) + releaseAmount });
+      await Transaction.create({
+        walletId: sellerWallet.id,
+        orderId: order.id,
+        type: 'escrow_release',
+        token: 'CELO',
+        amount: releaseAmount,
+        txHash: withdrawTxHash || null,
+        status: 'success'
+      });
+    }
+
     escrowRecord.stage = stage;
     if (stage === 3) escrowRecord.status = 'released';
     await escrowRecord.save();
 
-    let withdrawTxHash = null;
-    try {
-      const sellerWallet = await Wallet.findOne({ where: { userId: escrowRecord.sellerId } });
-      if (sellerWallet) {
-        const sellerPrivateKey = decrypt(sellerWallet.encryptedPrivateKey);
-        withdrawTxHash = await celoService.triggerSellerWithdraw(order.id, sellerPrivateKey);
-      }
-    } catch (withdrawErr) {
-      console.error(`[Escrow] Auto-withdraw failed for order ${orderId}:`, withdrawErr.message);
-    }
-
     await logAction(req.user.id, 'ESCROW_RELEASE', 'order', orderId,
-      `Stage ${stage} released. approveTx: ${txHash}, withdrawTx: ${withdrawTxHash || 'pending'}`);
+      `Stage ${stage} released. onChain: ${lockedOnChain}, approveTx: ${txHash}, withdrawTx: ${withdrawTxHash || 'db-only'}`);
 
-    res.status(200).json({ success: true, message: `Escrow Stage ${stage} released`, txHash, withdrawTxHash });
+    res.status(200).json({ success: true, message: `Escrow Stage ${stage} released`, txHash, withdrawTxHash, dbCredited: releaseAmount });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -185,28 +210,34 @@ async function listUsers(req, res, next) {
 
 async function airdropTestTokens(req, res, next) {
   try {
-    const { userId } = req.body;
+    const { userId, amount = 100 } = req.body;
     if (!userId) return res.status(400).json({ success: false, message: 'userId required' });
 
     const wallet = await Wallet.findOne({ where: { userId } });
     if (!wallet) return res.status(404).json({ success: false, message: 'User has no wallet yet' });
 
-    const adminKey = process.env.ADMIN_PRIVATE_KEY;
-    const results = {};
+    const airdropAmount = parseFloat(amount);
+    const newBalance = parseFloat(wallet.celoBalance || 0) + airdropAmount;
+    await wallet.update({ celoBalance: newBalance });
 
-    for (const token of ['CELO', 'cUSD', 'USDC', 'USDT']) {
-      try {
-        const txHash = await celoService.transferTokens(adminKey, wallet.address, token, '100');
-        results[token] = { success: true, txHash };
-      } catch (err) {
-        results[token] = { success: false, error: err.message };
-      }
-    }
+    const { Transaction } = require('../models');
+    await Transaction.create({
+      walletId: wallet.id,
+      type: 'deposit',
+      token: 'CELO',
+      amount: airdropAmount,
+      txHash: null,
+      status: 'success'
+    });
 
     await logAction(req.user.id, 'AIRDROP', 'user', userId,
-      `Airdropped 100 of each token to ${wallet.address}`);
+      `Credited ${airdropAmount} CELO to ${wallet.address} (new balance: ${newBalance})`);
 
-    res.status(200).json({ success: true, message: 'Airdrop sent', data: { address: wallet.address, results } });
+    res.status(200).json({
+      success: true,
+      message: `${airdropAmount} CELO added to user's balance`,
+      data: { address: wallet.address, celoBalance: newBalance }
+    });
   } catch (error) {
     next(error);
   }

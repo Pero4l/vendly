@@ -31,22 +31,31 @@ async function getUserWallet(userId) {
   const wallet = await Wallet.findOne({ where: { userId } });
   if (!wallet) throw new Error('Wallet not found');
 
-  // Fetch real-time balances from Celo
-  const realTimeBalances = await celoService.getBalances(wallet.address);
-
   // Decrypt private key
   const privateKey = encryption.decrypt(wallet.encryptedPrivateKey);
+
+  // CELO balance is always sourced from DB (admin-controlled, purchase-deducted).
+  // Other token balances come from the blockchain.
+  let cUSD = 0, USDT = 0, USDC = 0;
+  try {
+    const onChain = await celoService.getBalances(wallet.address);
+    cUSD = parseFloat(onChain.cUSD || '0');
+    USDT = parseFloat(onChain.USDT || '0');
+    USDC = parseFloat(onChain.USDC || '0');
+  } catch { /* use zeros */ }
+
+  const balances = {
+    CELO: parseFloat(wallet.celoBalance || '0'),
+    cUSD,
+    USDT,
+    USDC
+  };
 
   return {
     id: wallet.id,
     address: wallet.address,
     privateKey,
-    balances: {
-      CELO: parseFloat(realTimeBalances.CELO || '0.0'),
-      cUSD: parseFloat(realTimeBalances.cUSD || '0.0'),
-      USDT: parseFloat(realTimeBalances.USDT || '0.0'),
-      USDC: parseFloat(realTimeBalances.USDC || '0.0')
-    }
+    balances
   };
 }
 

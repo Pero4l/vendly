@@ -35,6 +35,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
       allowNull: false
+    },
+    celoBalance: {
+      type: DataTypes.DECIMAL(18, 8),
+      allowNull: false,
+      defaultValue: 0
     }
   }, {
     sequelize,

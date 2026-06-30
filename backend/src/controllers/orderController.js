@@ -1,4 +1,4 @@
-const { Order, OrderItem, Product, Store, StoreProfile, Escrow, Wallet, User, sequelize } = require('../models');
+const { Order, OrderItem, Product, Store, StoreProfile, Escrow, Wallet, Transaction, User, sequelize } = require('../models');
 const notificationService = require('../services/notificationService');
 const celoService = require('../blockchain/celoService');
 const { decrypt } = require('../utils/encryption');
@@ -113,45 +113,82 @@ async function createOrder(req, res, next) {
 
 async function confirmPayment(req, res, next) {
   try {
-    const { orderId, txHash } = req.body;
+    const { orderId } = req.body;
     if (!orderId) return res.status(400).json({ success: false, message: 'orderId is required' });
 
     const order = await Order.findByPk(orderId, { include: [{ model: Escrow, as: 'escrow' }] });
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
     if (order.buyerId !== req.user.id) return res.status(403).json({ success: false, message: 'Unauthorized' });
+    if (order.status === 'paid') return res.status(400).json({ success: false, message: 'Order already paid' });
 
-    await order.update({ status: 'paid' });
+    const buyerWallet = await Wallet.findOne({ where: { userId: order.buyerId } });
+    if (!buyerWallet) return res.status(400).json({ success: false, message: 'Buyer wallet not found' });
 
-    // Lock funds on-chain using the buyer's custodial wallet
-    let onChainTxHash = txHash || null;
+    const orderAmount = parseFloat(order.totalAmount);
+    let finalTxHash = null;
+    let paidViaChain = false;
+
+    // Check and deduct DB balance first (always — DB is the source of truth)
+    const dbBalance = parseFloat(buyerWallet.celoBalance || 0);
+    if (dbBalance < orderAmount) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient balance. You have ${dbBalance.toFixed(4)} CELO but need ${orderAmount.toFixed(4)} CELO.`
+      });
+    }
+    await buyerWallet.update({ celoBalance: dbBalance - orderAmount });
+
+    // Also try to lock funds on-chain (escrow contract, testnet/mainnet)
     if (order.escrow) {
       try {
-        const [buyerWallet, sellerWallet] = await Promise.all([
-          Wallet.findOne({ where: { userId: order.buyerId } }),
-          Wallet.findOne({ where: { userId: order.escrow.sellerId } }),
-        ]);
-        if (buyerWallet && sellerWallet) {
+        const sellerWallet = await Wallet.findOne({ where: { userId: order.escrow.sellerId } });
+        if (sellerWallet) {
           const buyerPrivateKey = decrypt(buyerWallet.encryptedPrivateKey);
-          onChainTxHash = await celoService.lockEscrowFunds(
+          finalTxHash = await celoService.lockEscrowFunds(
             order.id,
             buyerWallet.address,
             sellerWallet.address,
             'CELO',
-            order.totalAmount,
+            orderAmount,
             buyerPrivateKey
           );
-          await order.escrow.update({ contractTxHash: onChainTxHash });
+          paidViaChain = true;
         }
-      } catch (escrowErr) {
-        console.error('[Escrow] lockFunds failed:', escrowErr.message);
+      } catch (onChainErr) {
+        console.warn('[Payment] On-chain lockEscrowFunds failed (DB balance was deducted):', onChainErr.message);
       }
+    }
+
+    // Payment succeeded — commit the order and record the transaction
+    const dbTx = await sequelize.transaction();
+    try {
+      await order.update({ status: 'paid' }, { transaction: dbTx });
+
+      if (order.escrow && finalTxHash) {
+        await order.escrow.update({ contractTxHash: finalTxHash }, { transaction: dbTx });
+      }
+
+      await Transaction.create({
+        walletId: buyerWallet.id,
+        orderId: order.id,
+        type: 'purchase',
+        token: 'CELO',
+        amount: orderAmount,
+        txHash: finalTxHash,
+        status: 'success'
+      }, { transaction: dbTx });
+
+      await dbTx.commit();
+    } catch (dbErr) {
+      await dbTx.rollback();
+      throw dbErr;
     }
 
     try {
       await notificationService.notifyUser(order.buyerId, 'Payment Confirmed', `Payment for order ${order.orderNumber} is locked in escrow.`, 'escrow');
     } catch {}
 
-    res.status(200).json({ success: true, message: 'Payment confirmed', data: { ...order.toJSON(), onChainTxHash } });
+    res.status(200).json({ success: true, message: 'Payment confirmed', data: { ...order.toJSON(), txHash: finalTxHash } });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
