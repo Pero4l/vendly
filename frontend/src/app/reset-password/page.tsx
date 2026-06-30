@@ -31,7 +31,7 @@ function ResetPasswordForm() {
     try {
       await apiRequest('/auth/reset-password', {
         method: 'POST',
-        body: JSON.stringify({ token, newPassword: password })
+        body: JSON.stringify({ token, password })
       });
       setSuccess(true);
       setTimeout(() => router.push('/login'), 3000);
