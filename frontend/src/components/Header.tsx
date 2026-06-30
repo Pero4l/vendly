@@ -128,6 +128,7 @@ function HeaderContent() {
           method: 'POST',
           body: JSON.stringify({ identifier: email, password })
         });
+        if (!loginRes.success) throw new Error(loginRes.message || 'Login failed');
         saveToken(loginRes.data.accessToken);
         if (loginRes.data.user) saveUser(loginRes.data.user);
         await refreshProfile();
@@ -426,59 +427,101 @@ function HeaderContent() {
         </div>
       </div>
 
-      {/* 3. Sub-Navigation Category bar */}
-      <div className="w-full bg-neutral-50 border-t border-neutral-200 py-2 px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl flex justify-between items-center text-xs font-semibold text-neutral-600">
+      {/* 3. Sub-Navigation Departments Bar */}
+      <div className="w-full bg-neutral-900 border-t border-neutral-800">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex items-stretch justify-between">
 
-          <div className="flex items-center gap-6 overflow-x-auto scrollbar-none py-1">
-            <span className="flex items-center gap-1.5 text-neutral-900 font-bold hover:text-amber-500 cursor-pointer">
-              <Menu className="h-4 w-4 text-amber-500" />
-              All Departments
-            </span>
+          {/* Left: All Departments dropdown + inline category pills */}
+          <div className="flex items-stretch">
+            {/* All Departments button with hover dropdown */}
+            <div className="relative group">
+              <button className="flex items-center gap-2 h-full px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black transition-colors cursor-pointer whitespace-nowrap">
+                <Menu className="h-3.5 w-3.5" />
+                All Departments
+                <ChevronDown className="h-3 w-3 opacity-70" />
+              </button>
+              {/* Dropdown panel */}
+              <div className="absolute left-0 top-full z-50 w-56 bg-white border border-neutral-200 shadow-2xl rounded-b-xl overflow-hidden invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-150">
+                <Link
+                  href="/marketplace"
+                  className="flex items-center gap-2.5 px-4 py-2.5 text-xs font-bold text-neutral-700 hover:bg-amber-50 hover:text-amber-700 transition-colors border-b border-neutral-100"
+                >
+                  <ShoppingBag className="h-3.5 w-3.5 text-amber-500" />
+                  All Products
+                </Link>
+                {categories.map(cat => (
+                  <Link
+                    key={cat.id}
+                    href={`/marketplace?categoryId=${cat.id}`}
+                    className="flex items-center gap-2.5 px-4 py-2 text-xs text-neutral-600 hover:bg-amber-50 hover:text-amber-700 transition-colors border-b border-neutral-50 last:border-0"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
+                    {cat.name}
+                  </Link>
+                ))}
+                <Link
+                  href="/marketplace?search=Special"
+                  className="flex items-center gap-2.5 px-4 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors border-t border-neutral-100"
+                >
+                  🔥 Today&apos;s Hot Deals
+                </Link>
+              </div>
+            </div>
 
-            <Link href="/marketplace" className={`hover:text-neutral-900 transition-colors ${pathname === '/marketplace' ? 'text-amber-600 font-bold' : ''}`}>
-              Marketplace
-            </Link>
+            {/* Divider */}
+            <div className="w-px bg-neutral-700 mx-1 my-2" />
 
-            {categories.map(cat => (
+            {/* Inline category links */}
+            <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-none px-2">
               <Link
-                key={cat.id}
-                href={`/marketplace?categoryId=${cat.id}`}
-                className={`hover:text-neutral-900 transition-colors ${searchParams.get('categoryId') === cat.id ? 'text-amber-600 font-bold' : ''}`}
+                href="/marketplace"
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${pathname === '/marketplace' && !searchParams.get('categoryId') ? 'bg-amber-500 text-white' : 'text-neutral-300 hover:bg-neutral-800 hover:text-white'}`}
               >
-                {cat.name}
+                Marketplace
               </Link>
-            ))}
-
-            <Link href="/marketplace?search=Special" className="text-rose-600 hover:text-rose-700 transition-colors font-bold">
-              Today's Hot Deals
-            </Link>
+              {categories.map(cat => (
+                <Link
+                  key={cat.id}
+                  href={`/marketplace?categoryId=${cat.id}`}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${searchParams.get('categoryId') === cat.id ? 'bg-amber-500 text-white' : 'text-neutral-300 hover:bg-neutral-800 hover:text-white'}`}
+                >
+                  {cat.name}
+                </Link>
+              ))}
+              <Link
+                href="/marketplace?search=Special"
+                className="px-3 py-1.5 rounded-full text-xs font-bold text-rose-400 hover:bg-neutral-800 hover:text-rose-300 whitespace-nowrap transition-colors"
+              >
+                🔥 Hot Deals
+              </Link>
+            </div>
           </div>
 
-          <div className="hidden lg:flex items-center gap-6 text-neutral-500">
-          {currentUser && (
+          {/* Right: user-contextual links */}
+          <div className="hidden lg:flex items-center gap-1 text-neutral-400 text-xs font-semibold shrink-0 pl-4">
+            {currentUser && (
               <>
-                <Link href="/dashboard" className={`hover:text-neutral-900 transition ${pathname === '/dashboard' ? 'text-amber-600 font-bold' : ''}`}>
+                <Link href="/dashboard" className={`px-3 py-1.5 rounded-full whitespace-nowrap transition-colors hover:bg-neutral-800 hover:text-white ${pathname === '/dashboard' ? 'text-amber-400 font-bold' : ''}`}>
                   Dashboard
                 </Link>
-                <Link href="/wallet" className={`hover:text-neutral-900 transition flex items-center gap-1 ${pathname === '/wallet' ? 'text-amber-600 font-bold' : ''}`}>
-                  My Wallet
+                <Link href="/wallet" className={`px-3 py-1.5 rounded-full whitespace-nowrap transition-colors hover:bg-neutral-800 hover:text-white flex items-center gap-1 ${pathname === '/wallet' ? 'text-amber-400 font-bold' : ''}`}>
+                  <Wallet className="h-3 w-3" /> My Wallet
                 </Link>
                 {currentUser.role === 'seller' && (
-                  <Link href="/store" className={`hover:text-neutral-900 transition ${pathname === '/store' ? 'text-amber-600 font-bold' : ''}`}>
-                    Seller Storefront
+                  <Link href="/store" className={`px-3 py-1.5 rounded-full whitespace-nowrap transition-colors hover:bg-neutral-800 hover:text-white ${pathname === '/store' ? 'text-amber-400 font-bold' : ''}`}>
+                    My Store
                   </Link>
                 )}
                 {currentUser.role === 'admin' && (
-                  <Link href="/admin" className={`hover:text-neutral-900 transition ${pathname === '/admin' ? 'text-amber-600 font-bold' : ''}`}>
-                    Admin Operations
+                  <Link href="/admin" className={`px-3 py-1.5 rounded-full whitespace-nowrap transition-colors hover:bg-neutral-800 hover:text-white ${pathname === '/admin' ? 'text-amber-400 font-bold' : ''}`}>
+                    Admin
                   </Link>
                 )}
+                <div className="w-px bg-neutral-700 h-4 mx-1" />
               </>
             )}
-
-            <Link href="/buyer-protection" className="hover:text-neutral-900 flex items-center gap-1 transition-colors">
-              <ShieldAlert className="h-3.5 w-3.5 text-emerald-600" />
+            <Link href="/buyer-protection" className="px-3 py-1.5 rounded-full whitespace-nowrap transition-colors hover:bg-neutral-800 hover:text-emerald-400 flex items-center gap-1">
+              <ShieldAlert className="h-3 w-3 text-emerald-500" />
               Buyer Protection
             </Link>
           </div>
