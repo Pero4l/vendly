@@ -338,7 +338,7 @@ function HeaderContent() {
                     Hello, {currentUser.fullName ? currentUser.fullName.split(' ')[0] : currentUser.username || 'User'}
                   </span>
                   <Link
-                    href="/dashboard"
+                    href="/profile"
                     className="text-xs font-bold text-neutral-800 hover:text-amber-500 flex items-center gap-0.5"
                   >
                     My Account
