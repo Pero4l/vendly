@@ -118,7 +118,7 @@ export default function BottomNav() {
             {(!currentUser?.role || currentUser.role === 'buyer') && (
               <>
                 <SectionLabel label="Grow" />
-                <MoreMenuItem href="/store" icon={<Store className="h-5 w-5" />} label="Become a Vendor" color="text-amber-600" onPress={close} />
+                <MoreMenuItem href="/become-vendor" icon={<Store className="h-5 w-5" />} label="Become a Vendor" color="text-amber-600" onPress={close} />
               </>
             )}
 

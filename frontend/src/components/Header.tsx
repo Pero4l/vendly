@@ -520,6 +520,12 @@ function HeaderContent() {
                 <div className="w-px bg-neutral-700 h-4 mx-1" />
               </>
             )}
+            {(!currentUser || currentUser.role === 'buyer') && (
+              <Link href="/become-vendor" className={`px-3 py-1.5 rounded-full whitespace-nowrap transition-colors hover:bg-amber-500 hover:text-white flex items-center gap-1 ${pathname === '/become-vendor' ? 'bg-amber-500 text-white' : 'text-amber-400'}`}>
+                <Store className="h-3 w-3" />
+                Become a Vendor
+              </Link>
+            )}
             <Link href="/buyer-protection" className="px-3 py-1.5 rounded-full whitespace-nowrap transition-colors hover:bg-neutral-800 hover:text-emerald-400 flex items-center gap-1">
               <ShieldAlert className="h-3 w-3 text-emerald-500" />
               Buyer Protection
