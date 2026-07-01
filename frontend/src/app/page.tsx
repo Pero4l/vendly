@@ -214,7 +214,7 @@ export default function Home() {
                   </div>
                   <div>
                     <h4 className="text-xs font-black text-gray-500 leading-tight">Escrow Active</h4>
-                    <p className="text-[10px] text-gray-300 mt-0.5 font-medium">Secured on Celo Smart Contract</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5 font-medium">Secured on Celo Smart Contract</p>
                   </div>
                 </div>
                 <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
