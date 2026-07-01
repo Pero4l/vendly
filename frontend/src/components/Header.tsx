@@ -432,7 +432,7 @@ function HeaderContent() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex items-stretch justify-between">
 
           {/* Left: All Departments dropdown + inline category pills */}
-          <div className="flex items-stretch">
+          <div className="flex items-stretch min-w-0 flex-1">
             {/* All Departments button with hover dropdown */}
             <div className="relative group">
               <button className="flex items-center gap-2 h-full px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black transition-colors cursor-pointer whitespace-nowrap">
@@ -472,7 +472,7 @@ function HeaderContent() {
             <div className="w-px bg-neutral-700 mx-1 my-2" />
 
             {/* Inline category links */}
-            <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-none px-2">
+            <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-none px-2 min-w-0">
               <Link
                 href="/marketplace"
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${pathname === '/marketplace' && !searchParams.get('categoryId') ? 'bg-amber-500 text-white' : 'text-neutral-300 hover:bg-neutral-800 hover:text-white'}`}
