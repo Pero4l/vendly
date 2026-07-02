@@ -72,7 +72,7 @@ async function createProduct(req, res, next) {
 
 async function listProducts(req, res, next) {
   try {
-    const { search, categoryId, storeId, minPrice, maxPrice, minRating, sortBy, order } = req.query;
+    const { search, categoryId, storeId, minPrice, maxPrice, minRating, sortBy, order, ids, page } = req.query;
     const filter = { status: ['active', 'out_of_stock'] };
 
     if (search) filter[Op.or] = [
@@ -81,6 +81,7 @@ async function listProducts(req, res, next) {
     ];
     if (categoryId) filter.categoryId = categoryId;
     if (storeId) filter.storeId = storeId;
+    if (ids) filter.id = ids.split(',').map(id => id.trim()).filter(Boolean);
     if (minPrice || maxPrice) {
       filter.price = {};
       if (minPrice) filter.price[Op.gte] = parseFloat(minPrice);
@@ -88,16 +89,37 @@ async function listProducts(req, res, next) {
     }
     if (minRating) filter.averageRating = { [Op.gte]: parseFloat(minRating) };
 
-    const products = await Product.findAll({
+    const queryOptions = {
       where: filter,
       include: [
         { model: Store, as: 'store', attributes: ['id', 'name', 'slug'] },
         { model: Category, as: 'category', attributes: ['id', 'name'] }
       ],
-      order: [[sortBy || 'createdAt', order || 'DESC']]
+      order: [[sortBy || 'createdAt', order || 'DESC']],
+      distinct: true
+    };
+
+    // Pagination is opt-in via `page` so callers that need every matching
+    // row (seller dashboard by storeId, favorites by ids) keep today's
+    // unbounded behavior unless they ask for a page.
+    if (!page) {
+      const products = await Product.findAll(queryOptions);
+      return res.status(200).json({ success: true, data: products });
+    }
+
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 24));
+    const { rows: products, count: total } = await Product.findAndCountAll({
+      ...queryOptions,
+      limit,
+      offset: (pageNum - 1) * limit
     });
 
-    res.status(200).json({ success: true, data: products });
+    res.status(200).json({
+      success: true,
+      data: products,
+      pagination: { page: pageNum, limit, total, totalPages: Math.ceil(total / limit) }
+    });
   } catch (error) {
     next(error);
   }

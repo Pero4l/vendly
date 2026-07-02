@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import Header from '../components/Header';
 import {
   ShieldCheck,
@@ -200,10 +201,13 @@ export default function Home() {
           {/* Right Column: Premium Marketing 3D Illustration */}
           <div className="lg:col-span-5 relative flex justify-center">
             <div className="relative rounded-3xl overflow-hidden border border-neutral-800 bg-neutral-900/20 shadow-2xl glow-glow max-w-md w-full aspect-square">
-              <img
+              <Image
                 src="/landing.jpeg"
                 alt="Secure Escrow Protection"
-                className="w-full h-full object-cover rounded-3xl"
+                fill
+                priority
+                sizes="(max-width: 1024px) 90vw, 448px"
+                className="object-cover rounded-3xl"
               />
 
               {/* Glassmorphic overlay badge */}
@@ -567,10 +571,13 @@ export default function Home() {
                 >
                   <div>
                     <div className="h-44 overflow-hidden relative bg-neutral-100">
-                      <img
+                      <Image
                         src={cat.image?.url || getCatImage(cat.name)}
                         alt={cat.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        fill
+                        loading="lazy"
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     </div>
                     <div className="p-5 space-y-2">

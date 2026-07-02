@@ -20,10 +20,16 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
 }
 
 export function saveToken(token: string) {
-  if (typeof window !== 'undefined') localStorage.setItem('vendly_token', token);
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('vendly_token', token);
+    document.cookie = `vendly_token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
+  }
 }
 export function removeToken() {
-  if (typeof window !== 'undefined') localStorage.removeItem('vendly_token');
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('vendly_token');
+    document.cookie = 'vendly_token=; path=/; max-age=0; SameSite=Lax';
+  }
 }
 export function getToken() {
   if (typeof window !== 'undefined') return localStorage.getItem('vendly_token');

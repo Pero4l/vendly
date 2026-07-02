@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { apiRequest, saveToken, saveUser } from '../../utils/api';
 import { KeyRound, ArrowLeft, CheckCircle, Eye, EyeOff, Mail } from 'lucide-react';
@@ -9,7 +9,16 @@ import { KeyRound, ArrowLeft, CheckCircle, Eye, EyeOff, Mail } from 'lucide-reac
 type Mode = 'login' | 'register' | 'forgot';
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<Mode>('login');
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
@@ -47,7 +56,8 @@ export default function LoginPage() {
         });
         saveToken(res.data.accessToken);
         if (res.data.user) saveUser(res.data.user);
-        router.push('/dashboard');
+        const redirect = searchParams.get('redirect');
+        router.push(redirect && redirect.startsWith('/') ? redirect : '/dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');

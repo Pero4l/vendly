@@ -22,11 +22,9 @@ export default function FavoritesPage() {
 
   useEffect(() => {
     if (favorites.length === 0) { setLoading(false); return; }
-    apiRequest('/products')
+    apiRequest(`/products?ids=${favorites.join(',')}`)
       .then(res => {
-        if (res.success) {
-          setProducts(res.data.filter((p: any) => favorites.includes(p.id)));
-        }
+        if (res.success) setProducts(res.data);
       })
       .catch(() => {})
       .finally(() => setLoading(false));

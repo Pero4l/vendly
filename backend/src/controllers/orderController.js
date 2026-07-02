@@ -21,8 +21,20 @@ async function createOrder(req, res, next) {
     let subtotal = 0;
     const resolvedItems = [];
 
+    // Batch-fetch products and stores instead of round-tripping per item
+    const products = await Product.findAll({ where: { id: items.map(i => i.productId) }, transaction });
+    const productMap = new Map(products.map(p => [p.id, p]));
+
+    const storeIds = [...new Set(products.map(p => p.storeId))];
+    const stores = await Store.findAll({
+      where: { id: storeIds },
+      include: [{ model: StoreProfile, as: 'storeProfile', attributes: ['userId'] }],
+      transaction
+    });
+    const storeMap = new Map(stores.map(s => [s.id, s]));
+
     for (const item of items) {
-      const product = await Product.findByPk(item.productId, { transaction });
+      const product = productMap.get(item.productId);
       if (!product) throw new Error(`Product ${item.productId} not found`);
       if (product.status === 'suspended' || product.status === 'deleted') {
         throw new Error(`Product "${product.title}" is not available`);
@@ -32,10 +44,7 @@ async function createOrder(req, res, next) {
       }
 
       // Get the seller user id through the store
-      const store = await Store.findByPk(product.storeId, {
-        include: [{ model: StoreProfile, as: 'storeProfile', attributes: ['userId'] }],
-        transaction
-      });
+      const store = storeMap.get(product.storeId);
       if (!store) throw new Error('Store not found for product');
 
       const unitPrice = parseFloat(product.price);

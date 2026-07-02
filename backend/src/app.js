@@ -1,11 +1,14 @@
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const morgan = require('morgan');
 const routes = require('./routes');
 const errorHandler = require('./middlewares/errorHandler');
 const { apiLimiter } = require('./middlewares/rateLimiter');
 
 const app = express();
+
+app.use(compression());
 
 const ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL,

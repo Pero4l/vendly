@@ -79,6 +79,8 @@ function MarketplaceContent() {
   const [minRating, setMinRating] = useState('');
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState<{ page: number; limit: number; total: number; totalPages: number } | null>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [addedToCart, setAddedToCart] = useState<string | null>(null);
   const { addItem } = useCart();
@@ -102,7 +104,9 @@ function MarketplaceContent() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [search]);
 
-  const fetchProducts = async (overrideSearch?: string) => {
+  const PAGE_SIZE = 24;
+
+  const fetchProducts = async (overrideSearch?: string, pageOverride?: number) => {
     setLoading(true);
     try {
       const query = new URLSearchParams();
@@ -113,9 +117,14 @@ function MarketplaceContent() {
       if (minPrice) query.append('minPrice', minPrice);
       if (maxPrice) query.append('maxPrice', maxPrice);
       if (minRating) query.append('minRating', minRating);
+      query.append('page', String(pageOverride ?? page));
+      query.append('limit', String(PAGE_SIZE));
 
       const res = await apiRequest(`/products?${query.toString()}`);
-      if (res.success) setProducts(res.data);
+      if (res.success) {
+        setProducts(res.data);
+        setPagination(res.pagination ?? null);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -147,16 +156,27 @@ function MarketplaceContent() {
     setTimeout(() => setAddedToCart(null), 2000);
   };
 
-  // Refetch when debounced search, category, or rating changes
+  // Filters changed — jump back to page 1
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, category, storeFilter, minRating]);
+
+  // Refetch when debounced search, category, rating, or page changes
   useEffect(() => {
     fetchProducts();
-  }, [debouncedSearch, category, storeFilter, minRating]);
+  }, [debouncedSearch, category, storeFilter, minRating, page]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Cancel pending debounce and search immediately
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setDebouncedSearch(search);
+  };
+
+  const goToPage = (next: number) => {
+    if (next < 1 || (pagination && next > pagination.totalPages)) return;
+    setPage(next);
+    window.scrollTo({ top: document.getElementById('catalog')?.offsetTop ?? 0, behavior: 'smooth' });
   };
 
 
@@ -384,7 +404,7 @@ function MarketplaceContent() {
               <p className="text-xs text-neutral-500 mt-0.5">Verified escrow protection active on all items</p>
             </div>
             <span className="text-xs font-bold text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">
-              {products.length} Items Available
+              {pagination?.total ?? products.length} Items Available
             </span>
           </div>
 
@@ -513,6 +533,28 @@ function MarketplaceContent() {
                   </Link>
                 );
               })}
+            </div>
+          )}
+
+          {pagination && pagination.totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <button
+                onClick={() => goToPage(pagination.page - 1)}
+                disabled={pagination.page <= 1}
+                className="rounded-lg border border-neutral-200 px-3.5 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >
+                Previous
+              </button>
+              <span className="text-xs font-bold text-neutral-500 px-2">
+                Page {pagination.page} of {pagination.totalPages}
+              </span>
+              <button
+                onClick={() => goToPage(pagination.page + 1)}
+                disabled={pagination.page >= pagination.totalPages}
+                className="rounded-lg border border-neutral-200 px-3.5 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >
+                Next
+              </button>
             </div>
           )}
         </section>
