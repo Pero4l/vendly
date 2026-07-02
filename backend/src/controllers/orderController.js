@@ -128,15 +128,17 @@ async function confirmPayment(req, res, next) {
     let finalTxHash = null;
     let paidViaChain = false;
 
-    // Check and deduct DB balance first (always — DB is the source of truth)
-    const dbBalance = parseFloat(buyerWallet.celoBalance || 0);
-    if (dbBalance < orderAmount) {
+    // Check real on-chain CELO balance — on-chain is the source of truth.
+    const { ethers } = require('ethers');
+    const celoSvc = require('../blockchain/celoService');
+    const onChainBalances = await celoSvc.getBalances(buyerWallet.address);
+    const onChainBalance = parseFloat(onChainBalances.CELO || '0');
+    if (onChainBalance < orderAmount) {
       return res.status(400).json({
         success: false,
-        message: `Insufficient balance. You have ${dbBalance.toFixed(4)} CELO but need ${orderAmount.toFixed(4)} CELO.`
+        message: `Insufficient balance. You have ${onChainBalance.toFixed(4)} CELO on-chain but need ${orderAmount.toFixed(4)} CELO.`
       });
     }
-    await buyerWallet.update({ celoBalance: dbBalance - orderAmount });
 
     // Also try to lock funds on-chain (escrow contract, testnet/mainnet)
     if (order.escrow) {
@@ -155,7 +157,11 @@ async function confirmPayment(req, res, next) {
           paidViaChain = true;
         }
       } catch (onChainErr) {
-        console.warn('[Payment] On-chain lockEscrowFunds failed (DB balance was deducted):', onChainErr.message);
+        console.error('[Payment] lockEscrowFunds failed:', onChainErr.message, onChainErr.stack);
+        return res.status(400).json({
+          success: false,
+          message: `Escrow lock failed: ${onChainErr.message}`
+        });
       }
     }
 

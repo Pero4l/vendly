@@ -218,6 +218,25 @@ async function airdropTestTokens(req, res, next) {
 
     const airdropAmount = parseFloat(amount);
     const newBalance = parseFloat(wallet.celoBalance || 0) + airdropAmount;
+
+    // Send real on-chain CELO to the user's custodial wallet so their address
+    // actually holds the funds — required for the buyer→admin→escrow flow.
+    let txHash = null;
+    try {
+      txHash = await celoService.transferTokens(
+        process.env.ADMIN_PRIVATE_KEY,
+        wallet.address,
+        'CELO',
+        airdropAmount
+      );
+    } catch (chainErr) {
+      console.error('[Airdrop] On-chain transfer failed:', chainErr.message);
+      return res.status(400).json({
+        success: false,
+        message: `On-chain transfer failed: ${chainErr.message}. Ensure the admin wallet has enough CELO.`
+      });
+    }
+
     await wallet.update({ celoBalance: newBalance });
 
     const { Transaction } = require('../models');
@@ -226,17 +245,17 @@ async function airdropTestTokens(req, res, next) {
       type: 'deposit',
       token: 'CELO',
       amount: airdropAmount,
-      txHash: null,
+      txHash,
       status: 'success'
     });
 
     await logAction(req.user.id, 'AIRDROP', 'user', userId,
-      `Credited ${airdropAmount} CELO to ${wallet.address} (new balance: ${newBalance})`);
+      `Credited ${airdropAmount} CELO to ${wallet.address} (new balance: ${newBalance}), txHash: ${txHash}`);
 
     res.status(200).json({
       success: true,
-      message: `${airdropAmount} CELO added to user's balance`,
-      data: { address: wallet.address, celoBalance: newBalance }
+      message: `${airdropAmount} CELO sent to user's wallet on-chain`,
+      data: { address: wallet.address, celoBalance: newBalance, txHash }
     });
   } catch (error) {
     next(error);

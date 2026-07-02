@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Bell, UserCircle, ShoppingCart } from 'lucide-react';
+import Image from 'next/image';
 import { getUser } from '../utils/api';
 import { useCart } from '../context/CartContext';
 
@@ -32,14 +33,18 @@ export default function MobileTopBar() {
   return (
     <header className="md:hidden sticky top-0 z-50 bg-white/95 backdrop-blur-lg border-b border-neutral-100">
       <div className="flex items-center justify-between px-4 py-3">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="text-lg font-black tracking-tight text-neutral-900">VENDLY</span>
-          <span className="bg-amber-100 text-amber-800 text-[9px] font-black px-1.5 py-0.5 rounded tracking-wider uppercase">
-            Escrow
-          </span>
+        <Link href="/">
+          <Image
+            src="/logo.png"
+            alt="Vendly"
+            width={100}
+            height={32}
+            className="h-16 w-auto object-contain mix-blend-multiply"
+            priority
+          />
         </Link>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-3">
           {currentUser ? (
             <>
               {/* Cart — only when logged in */}
@@ -61,7 +66,7 @@ export default function MobileTopBar() {
               </Link>
 
               {/* User avatar */}
-              <Link href="/profile" className="h-8 w-8 rounded-full bg-amber-500 flex items-center justify-center text-white font-black text-sm ml-0.5">
+              <Link href="/profile" className="h-10 w-10 rounded-full bg-amber-500 flex items-center justify-center text-white font-black text-sm ml-0.5">
                 {(currentUser.fullName || currentUser.username || 'U').charAt(0).toUpperCase()}
               </Link>
             </>

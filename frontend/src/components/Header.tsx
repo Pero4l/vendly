@@ -20,6 +20,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { apiRequest, saveToken, saveUser } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { ShoppingBag, ShieldAlert, Store, User, LogOut, KeyRound, Search, ChevronDown, HelpCircle, Lock, Menu, Bell, ShoppingCart, X, Package, Wallet, AlertTriangle, Info, Eye, EyeOff } from 'lucide-react';
+import Image from 'next/image';
 import { useCart } from '../context/CartContext';
 
 function HeaderContent() {
@@ -206,14 +207,14 @@ function HeaderContent() {
           {/* Logo */}
           <div className="flex items-center justify-between w-full md:w-auto">
             <Link href="/" className="flex items-center gap-2 group">
-              <span className="text-2xl font-black tracking-tighter text-neutral-900 group-hover:text-amber-500 transition-colors">
-                VENDLY
-              </span>
-              <div className="flex flex-col">
-                <span className="bg-amber-100 px-1.5 py-0.5 rounded text-[9px] font-bold text-amber-800 tracking-wider">
-                  ESCROW MARKET
-                </span>
-              </div>
+              <Image
+                src="/logo.png"
+                alt="Vendly"
+                width={120}
+                height={40}
+                className="h-22 w-auto object-contain mix-blend-multiply"
+                priority
+              />
             </Link>
 
             {/* Mobile Account trigger */}

@@ -180,19 +180,21 @@ async function lockEscrowFunds(orderId, buyerAddress, sellerAddress, tokenSymbol
 
   const amountWei = ethers.parseEther(amount.toString());
   const adminWallet = getAdminWallet();
-  const buyerWallet = new ethers.Wallet(buyerPrivateKey, getProvider());
+  const buyerOnChainWallet = new ethers.Wallet(buyerPrivateKey, getProvider());
   const orderIdBytes = ethers.id(orderId);
   const tokenAddress = TOKENS[tokenSymbol] ?? ethers.ZeroAddress;
 
   if (tokenSymbol === 'CELO') {
-    // Step 1: Buyer sends CELO to admin wallet (debit buyer)
-    const transferTx = await buyerWallet.sendTransaction({
+    // Step 1: Buyer's custodial wallet sends CELO to admin wallet.
+    // Buyer's wallet is funded on-chain via airdrop, so they cover the amount.
+    const transferTx = await buyerOnChainWallet.sendTransaction({
       to: adminWallet.address,
       value: amountWei
     });
     await transferTx.wait();
 
-    // Step 2: Admin locks it in the escrow contract (admin sends that CELO to contract)
+    // Step 2: Admin locks that CELO in the escrow contract.
+    // Admin only covers gas here — the CELO came from the buyer.
     const contract = getEscrowContract();
     const lockTx = await contract.lockFunds(
       orderIdBytes, buyerAddress, sellerAddress, tokenAddress, amountWei,

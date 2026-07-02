@@ -5,6 +5,7 @@ const app = require('./app');
 const { sequelize } = require('./models');
 const { initSocket } = require('./sockets/chatSocket');
 const { startWorkers } = require('./jobs/processors');
+const { startBalanceSync } = require('./jobs/balanceSync');
 const logger = require('./utils/logger');
 
 const PORT = process.env.PORT;
@@ -69,6 +70,14 @@ async function start() {
     logger.info('Background workers started.');
   } catch (err) {
     logger.warn('Background workers failed to start (jobs will use mock queue):', err.message);
+  }
+
+  // ── Wallet balance sync (every 30s) ───────────────────────────────────────
+  try {
+    startBalanceSync();
+    logger.info('Wallet balance sync started (30s interval).');
+  } catch (err) {
+    logger.warn('Wallet balance sync failed to start:', err.message);
   }
 
   // ── HTTP server ───────────────────────────────────────────────────────────

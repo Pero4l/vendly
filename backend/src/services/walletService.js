@@ -34,22 +34,21 @@ async function getUserWallet(userId) {
   // Decrypt private key
   const privateKey = encryption.decrypt(wallet.encryptedPrivateKey);
 
-  // CELO balance is always sourced from DB (admin-controlled, purchase-deducted).
-  // Other token balances come from the blockchain.
-  let cUSD = 0, USDT = 0, USDC = 0;
+  // All balances sourced from the blockchain — on-chain is the source of truth.
+  let CELO = 0, cUSD = 0, USDT = 0, USDC = 0;
   try {
     const onChain = await celoService.getBalances(wallet.address);
+    CELO = parseFloat(onChain.CELO || '0');
     cUSD = parseFloat(onChain.cUSD || '0');
     USDT = parseFloat(onChain.USDT || '0');
     USDC = parseFloat(onChain.USDC || '0');
-  } catch { /* use zeros */ }
+    // Persist CELO balance to DB so it's always in sync
+    if (parseFloat(wallet.celoBalance || '0') !== CELO) {
+      await wallet.update({ celoBalance: CELO });
+    }
+  } catch { /* use zeros on RPC failure */ }
 
-  const balances = {
-    CELO: parseFloat(wallet.celoBalance || '0'),
-    cUSD,
-    USDT,
-    USDC
-  };
+  const balances = { CELO, cUSD, USDT, USDC };
 
   return {
     id: wallet.id,

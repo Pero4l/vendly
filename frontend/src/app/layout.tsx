@@ -34,15 +34,33 @@ const geistMono = Geist_Mono({
 
 /* ── SEO Metadata ──────────────────────────────────────────────── */
 export const metadata: Metadata = {
-  title: 'Vendly | Escrow-Based Marketplace on Celo',
+  title: 'Vendly',
   description:
     'Trade physical and digital products securely with decentralized escrow payments, automated milestones, and transparent reputation tracking on the Celo blockchain.',
   keywords: ['Celo', 'Web3 Marketplace', 'Escrow Contract', 'USDT', 'USDC', 'cUSD', 'Buyer Protection'],
   authors: [{ name: 'Vendly Team' }],
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
   openGraph: {
-    title: 'Vendly | Escrow-Based Marketplace on Celo',
-    description: 'Decentralized trade protection using advanced smart contract escrows.',
+    title: 'Vendly | Buy. Sell. Trust. Deliver.',
+    description: 'Trade securely with decentralized escrow payments on the Celo blockchain. Every transaction is protected.',
     type: 'website',
+    images: [
+      {
+        url: '/logo.png',
+        width: 512,
+        height: 512,
+        alt: 'Vendly — Escrow Marketplace',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Vendly | Buy. Sell. Trust. Deliver.',
+    description: 'Trade securely with decentralized escrow payments on the Celo blockchain.',
+    images: ['/logo.png'],
   },
 };
 
