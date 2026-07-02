@@ -30,6 +30,11 @@ export default function MobileTopBar() {
     });
   }, [pathname]);
 
+  // Auth pages already show their own branding/back link — a second
+  // "Sign In" bar on top of the login form itself is redundant and
+  // reads like two separate login prompts stacked on one page.
+  if (pathname === '/login') return null;
+
   return (
     <header className="md:hidden sticky top-0 z-50 bg-white/95 backdrop-blur-lg border-b border-neutral-100">
       <div className="flex items-center justify-between px-4 py-3">
